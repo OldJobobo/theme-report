@@ -12,7 +12,7 @@ receipt="$plugin/.theme-report-owned"
 [[ -f $receipt && ! -L $receipt ]] || { echo "No owned install found."; exit 0; }
 # Disable before removing files, so the bar never references a missing plugin.
 if ! $dry && [[ $root == "$(realpath -m -- "$HOME")" ]] && command -v omarchy >/dev/null; then
-  omarchy plugin disable "$id" >/dev/null 2>&1 && echo "Disabled $id" || true
+  if omarchy plugin disable "$id" >/dev/null 2>&1; then echo "Disabled $id"; fi
 else
   echo "Disable the widget first if it is enabled: omarchy plugin disable $id"
 fi
@@ -47,7 +47,9 @@ for rel in "${order[@]}"; do
     # A skill lives in its own folder; remove the folder once it is empty.
     if [[ $rel == */theme-report/SKILL.md ]]; then
       rmdir -- "$(dirname -- "$target")" 2>/dev/null || true
-      [[ $rel == .local/share/* ]] && rmdir -- "$root/.local/share/theme-report/skills" "$root/.local/share/theme-report" 2>/dev/null || true
+      if [[ $rel == .local/share/* ]]; then
+        rmdir -- "$root/.local/share/theme-report/skills" "$root/.local/share/theme-report" 2>/dev/null || true
+      fi
     fi
   fi
 done
