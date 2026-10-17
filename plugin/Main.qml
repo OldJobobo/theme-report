@@ -62,6 +62,9 @@ Panel {
     onOpenedChanged: {
         if (opened) request(false)
         else audit.running = false
+        // Reading a saved agent review is a file read, not an audit; an agent may have
+        // written it since the panel last opened.
+        if (opened) { reviewFile.reload(); reviewRecord.reload() }
     }
     Process {
         id: audit
@@ -197,6 +200,8 @@ Panel {
             analyzerVersion: r ? r.analyzerVersion : null,
             checking: everyPeer().some(function(peer) { return peer.checking }),
             open: !!shown,
+            agent: root.agentId || null,
+            agentMessage: root.agentMessage || null,
             error: (shown && shown.error) || headlessError || null
         })
     }
@@ -239,6 +244,107 @@ Panel {
         function refresh(): string { return root.startCheck(true) }
         function status(): string { return root.statusJson() }
         function grade(): string { return root.badgeFor(root.latestReport()) }
+        // Agent handoffs: "started", "busy", "no-report" or "stale". The result
+        // (launched / copied / no-agent / an error) shows in the panel and in status.
+        function askAgent(kind: string): string { return root.startAgent(kind, "", "window") }
+        function fixRule(ruleId: string): string { return root.startAgent("fix", ruleId, "window") }
+        function copyPrompt(kind: string): string { return root.startAgent(kind, "", "copy") }
+    }
+
+    // ------------------------------------------------------------------ agent
+    // Prompts are built by the analyzer from the cached report; the panel never writes them.
+    property string agentId: ""
+    readonly property string agentName: agentLabel(agentId)
+    property string agentMessage: ""
+    property string agentPreview: ""
+    property string agentMode: ""
+    property string agentOutput: ""
+    property string agentError: ""
+    property int agentExit: -1
+    // Process.running turns true on a later tick; this answers "busy" immediately.
+    property bool agentBusy: false
+    function agentLabel(id) {
+        return {pi:"Pi", omp:"Oh My Pi", opencode:"OpenCode", ori:"Ori", claude:"Claude Code", codex:"Codex", grok:"Grok", openclaw:"OpenClaw", agy:"Antigravity", hermes:"Hermes", copilot:"Copilot", crush:"Crush", "cursor-agent":"Cursor", muse:"Muse", kimi:"Kimi"}[id] || (id ? id : "")
+    }
+    // mode: "window" opens the agent, "copy" copies the prompt, "preview" shows it in the panel.
+    function startAgent(kind, rule, mode) {
+        if (["fix", "measure", "explain", "review"].indexOf(kind) < 0 || ["window", "copy", "preview"].indexOf(mode) < 0) return "unknown"
+        if (agentRun.running) return "busy"
+        var r = latestReport()
+        if (!r) return "no-report"
+        if (isStale(r)) return "stale"
+        var args = mode === "window" ? [analyzer, "agent", kind, "--window"] : [analyzer, "prompt", kind]
+        if (rule) args = args.concat(["--rule", String(rule)])
+        agentMode = mode
+        agentOutput = ""
+        agentError = ""
+        agentExit = -1
+        agentBusy = true
+        agentMessage = mode === "window" ? "Opening " + (agentName || "the agent picker") + "…" : "Preparing the prompt…"
+        agentRun.command = args
+        agentRun.running = true
+        return "started"
+    }
+    function finishAgent() {
+        if (!agentBusy || agentRun.running) return
+        agentBusy = false
+        var out = agentOutput.trim()
+        if (agentExit !== 0 || !out) {
+            agentMessage = agentExit < 0 && !agentError ? "Could not start the analyzer. Check ~/.local/bin/theme-report." : (agentError.trim().replace(/^Theme Report: /, "") || "Could not prepare the prompt.")
+        } else if (agentMode === "copy") {
+            Quickshell.clipboardText = agentOutput
+            agentMessage = "Prompt copied"
+        } else if (agentMode === "preview") {
+            agentPreview = agentOutput
+            agentMessage = ""
+        } else {
+            agentMessage = out === "launched" ? "Opened " + agentName : out === "no-agent" ? "Choose a default agent, then try again" : out
+            // The agent window (or Omarchy's agent picker) takes over; get the panel out of its way.
+            // A refusal keeps the panel open so its reason stays readable.
+            if (out === "launched" || out === "no-agent") hidePanel()
+        }
+    }
+    Process {
+        id: agentRun
+        stdout: StdioCollector { waitForEnd: true; onStreamFinished: root.agentOutput = text }
+        stderr: StdioCollector { waitForEnd: true; onStreamFinished: root.agentError = text }
+        onExited: function(exitCode, exitStatus) { root.agentExit = exitCode }
+        // A process that cannot start reports only running=false, never exited.
+        onRunningChanged: if (!running) Qt.callLater(root.finishAgent)
+    }
+    // The latest agent review for the shown theme, and the request that asked for it.
+    readonly property string reviewTheme: report && /^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$/.test(String(report.theme)) ? report.theme : ""
+    property string reviewText: ""
+    property var reviewMeta: null
+    FileView {
+        id: reviewFile
+        path: root.reviewTheme ? root.cacheHome + "/theme-report/reviews/" + root.reviewTheme + ".md" : ""
+        watchChanges: true
+        printErrors: false
+        onPathChanged: root.reviewText = ""
+        onFileChanged: reload()
+        onLoaded: root.reviewText = text().slice(0, 40000)
+        onLoadFailed: root.reviewText = ""
+    }
+    FileView {
+        id: reviewRecord
+        path: root.reviewTheme ? root.cacheHome + "/theme-report/reviews/" + root.reviewTheme + ".json" : ""
+        watchChanges: true
+        printErrors: false
+        onPathChanged: root.reviewMeta = null
+        onFileChanged: reload()
+        onLoaded: {
+            try { root.reviewMeta = JSON.parse(text()) } catch (e) { root.reviewMeta = null }
+        }
+        onLoadFailed: root.reviewMeta = null
+    }
+    FileView {
+        path: root.home + "/.config/omarchy/defaults/agent"
+        watchChanges: true
+        printErrors: false
+        onFileChanged: reload()
+        onLoaded: root.agentId = text().split("\n")[0].trim()
+        onLoadFailed: root.agentId = ""
     }
 
     // Reading the last published result is not an audit: it restores the badge after a
@@ -287,8 +393,18 @@ Panel {
             status: root.status
             errorText: root.error
             refreshing: audit.running
+            agentName: root.agentName
+            agentBusy: root.agentBusy
+            agentMessage: root.agentMessage
+            agentPreview: root.agentPreview
+            reviewText: root.reviewText
+            reviewMeta: root.reviewMeta
+            reviewAgentName: root.reviewMeta ? root.agentLabel(String(root.reviewMeta.agent || "")) : ""
+            actionsEnabled: !root.stale && !root.checking
             onRefreshRequested: root.request(true)
             onCloseRequested: root.close()
+            onAgentRequested: function(kind, rule, mode) { root.startAgent(kind, rule, mode) }
+            onPreviewClosed: root.agentPreview = ""
         }
     }
 }

@@ -26,6 +26,27 @@ FocusScope {
     property string copiedPaletteColor: ""
     property string focusedPaletteColor: ""
     property string pendingCategory: ""
+    // Agent handoff state, owned by Main.qml.
+    property string agentName: ""
+    property bool agentBusy: false
+    property string agentMessage: ""
+    property string agentPreview: ""
+    property bool actionsEnabled: true
+    // The latest saved agent review for this theme (Markdown) and its request record.
+    property string reviewText: ""
+    property var reviewMeta: null
+    property string reviewAgentName: ""
+    property bool reviewOpen: false
+    readonly property bool reviewPending: !!reviewMeta && reviewText === ""
+    readonly property bool reviewOutdated: !!reviewMeta && !!report && !!reviewMeta.inputFingerprint && reviewMeta.inputFingerprint !== report.inputFingerprint
+    // The handoff result shown under the actions; it fades after a few seconds.
+    property string agentNote: ""
+    onAgentMessageChanged: {
+        agentNote = agentMessage
+        if (agentMessage && !agentMessage.endsWith("…")) agentNoteExpiry.restart()
+        else agentNoteExpiry.stop()
+    }
+    Timer { id: agentNoteExpiry; interval: 4500; onTriggered: root.agentNote = "" }
     readonly property var paletteEvidence: report && Array.isArray(report.findings) ? report.findings.find(function(f) { return f.ruleId === "validity.roles" }) : null
     readonly property var paletteColors: paletteEvidence && paletteEvidence.evidence ? paletteEvidence.evidence.paletteColors || paletteEvidence.evidence.resolvedColors || ({}) : ({})
     readonly property var paletteBanks: paletteRows()
@@ -58,7 +79,7 @@ FocusScope {
     readonly property var contract: report && report.runtimeContract ? report.runtimeContract : null
     readonly property bool runtimePaused: !!contract && (contract.status === "partial" || contract.status === "unsupported")
     // Nerd Font glyphs, the same family the shell's own icons use.
-    readonly property var glyphs: ({failure:"", caution:"", unassessed:"", note:"", pass:"", open:"", closed:""})
+    readonly property var glyphs: ({failure:"", caution:"", unassessed:"", note:"", pass:"", open:"", closed:"", agent:"\uf0d0", copy:"\uf0c5", preview:"\uf06e", review:"\uf0f6"})
     onRefreshingChanged: {
         slowRefresh = false
         if (refreshing) slowRefreshTimer.restart()
@@ -67,6 +88,8 @@ FocusScope {
     Timer { id: slowRefreshTimer; interval: 350; onTriggered: root.slowRefresh = true }
     signal refreshRequested()
     signal closeRequested()
+    signal agentRequested(string kind, string rule, string mode)
+    signal previewClosed()
 
     component EvidenceVisual: Column {
         id: visual
@@ -204,6 +227,27 @@ FocusScope {
                     Text { width: parent.width; text: check.finding.severity === "pass" ? root.detail(check.finding) : check.finding.remediation; textFormat: Text.PlainText; color: root.ink; font.family: root.bodyFont; font.pixelSize: Style.font.bodySmall; wrapMode: Text.Wrap }
                 }
                 Text { width: parent.width; visible: text !== ""; text: (check.finding.sources || []).map(function(s) { return s.file + (s.section ? "  [" + s.section + "]" : "") + (s.key ? "  " + s.key : "") }).join("\n"); textFormat: Text.PlainText; color: root.muted; font.family: Style.font.family; font.pixelSize: Style.font.bodySmall; wrapMode: Text.WrapAnywhere }
+                Flow {
+                    width: parent.width; spacing: Style.space(6)
+                    visible: root.handoffKind(check.finding) !== ""
+                    Ui.Button {
+                        objectName: "checkAgentButton"
+                        text: !root.agentName ? "Choose an agent" : root.handoffKind(check.finding) === "fix" ? "Fix with " + root.agentName : "Ask " + root.agentName
+                        iconText: root.glyphs.agent
+                        bordered: true; foreground: root.ink; accent: root.accent; focusable: true; fontFamily: root.bodyFont; fontSize: Style.font.bodySmall
+                        enabled: root.actionsEnabled && !root.agentBusy
+                        tooltipText: root.handoffKind(check.finding) === "fix" ? "Open your agent with a prompt to fix only this check" : "Open your agent to find out what this check needs"
+                        onActiveFocusChanged: if (activeFocus) root.reveal(this)
+                        onClicked: root.agentRequested(root.handoffKind(check.finding), check.finding.ruleId, "window")
+                    }
+                    Ui.Button {
+                        text: "Copy prompt"; iconText: root.glyphs.copy
+                        foreground: root.muted; accent: root.accent; focusable: true; fontFamily: root.bodyFont; fontSize: Style.font.bodySmall
+                        enabled: root.actionsEnabled && !root.agentBusy
+                        onActiveFocusChanged: if (activeFocus) root.reveal(this)
+                        onClicked: root.agentRequested(root.handoffKind(check.finding), check.finding.ruleId, "copy")
+                    }
+                }
                 Ui.Button { text: check.technical ? "Hide technical data" : "Technical data"; foreground: root.muted; accent: root.accent; focusable: true; fontFamily: root.bodyFont; fontSize: Style.font.bodySmall; onActiveFocusChanged: if (activeFocus) root.reveal(this); onClicked: root.toggleDetail(check.finding.ruleId, true) }
                 Text { visible: check.technical; width: parent.width; text: "MEASUREMENT · " + check.finding.ruleId; color: root.accent; font.family: root.bodyFont; font.pixelSize: Style.font.bodySmall; wrapMode: Text.Wrap }
                 Text { visible: check.technical; width: parent.width; text: JSON.stringify(check.finding.evidence, null, 2); textFormat: Text.PlainText; color: root.muted; font.family: Style.font.family; font.pixelSize: Style.font.bodySmall; wrapMode: Text.WrapAnywhere }
@@ -294,6 +338,49 @@ FocusScope {
     function severityColor(f) {
         var key = severityKey(f)
         return key === "failure" ? failure : key === "caution" || key === "note" && f.evidence && f.evidence.referenceDefectOwnedByReadability ? warning : key === "pass" ? accent : muted
+    }
+    // Which handoff a check offers: fix its problem, or find out why it was not measured.
+    function handoffKind(f) {
+        if (!f || f.ruleId === "runtime.paused" || (f.evidence && f.evidence.runtimeContract)) return ""
+        if (String(f.ruleId).indexOf("advisory.") === 0) return ""
+        return belongs(f, "issues") ? "fix" : belongs(f, "unassessed") ? "measure" : ""
+    }
+    // The header's main handoff: fix every issue, else ask about unmeasured checks.
+    // The header's main handoff: fix every issue, else ask about unmeasured checks,
+    // else (a passing theme) a full review.
+    function primaryHandoff() {
+        if (!report || previous) return null
+        var issues = number("issues"), limits = report.findings.filter(function(f) { return root.handoffKind(f) === "measure" }).length
+        if (issues) return {kind:"fix", label:(agentName ? (issues === 1 ? "Fix 1 issue" : "Fix all " + issues + " issues") + " with " + agentName : "Choose an agent to fix " + issues + (issues === 1 ? " issue" : " issues"))}
+        if (limits) return {kind:"measure", label:(agentName ? "Ask " + agentName + " about " + limits + " unmeasured" : "Choose an agent")}
+        return {kind:"review", label:reviewLabel()}
+    }
+    function reviewLabel() {
+        return !agentName ? "Choose an agent for a review" : reviewText || reviewPending ? "Review again with " + agentName : "Review with " + agentName
+    }
+    function promptNoun(kind) {
+        return {fix:"fix", measure:"measuring", explain:"explain", review:"review"}[kind] || ""
+    }
+    // Agent reviews are Markdown written by the agent: show text only, no images or HTML.
+    function reviewMarkdown(text) {
+        return String(text).replace(/^#\s[^\n]*\n+/, "").replace(/!\[[^\]]*\]\([^)]*\)/g, "").replace(/<[^>]*>/g, "")
+    }
+    function reviewSummary(text) {
+        var m = String(text).match(/##\s*Summary[^\n]*\n+([\s\S]*?)(\n#|$)/)
+        var body = m ? m[1] : String(text).replace(/^#[^\n]*\n/, "")
+        return body.replace(/[*_`>#\[\]]/g, "").replace(/\s+/g, " ").trim().slice(0, 360)
+    }
+    function reviewByline() {
+        var who = reviewAgentName || "your agent"
+        if (reviewPending) return "Waiting for " + who + " to save the review…"
+        var parts = []
+        if (reviewMeta) {
+            parts.push("By " + who)
+            var when = new Date((reviewMeta.requestedAt || 0) * 1000)
+            if (reviewMeta.requestedAt) parts.push(when.toDateString() === new Date().toDateString() ? Qt.formatTime(when, "hh:mm") : Qt.formatDate(when, "d MMM"))
+        }
+        if (reviewOutdated) parts.push("theme changed since")
+        return parts.join(" · ")
     }
     function categoryOpen(id) {
         var choice = openCategories[id]
@@ -482,6 +569,8 @@ FocusScope {
             copiedPaletteColor = ""
             focusedPaletteColor = ""
             paletteCopyExpiry.stop()
+            if (agentPreview) previewClosed()
+            reviewOpen = false
         }
         if (report && pendingCategory) selectCategory(pendingCategory)
     }
@@ -548,6 +637,65 @@ FocusScope {
                 }
             }
         }
+        // Hand the report to the default agent: the main action, a copy, and a preview.
+        Flow {
+            id: agentActions
+            objectName: "agentActions"
+            width: parent.width; spacing: Style.space(6)
+            visible: root.primaryHandoff() !== null
+            // The main action reads as one: tinted with the theme's accent.
+            Ui.Button {
+                id: agentFixButton
+                objectName: "agentFixButton"
+                text: root.primaryHandoff() ? root.primaryHandoff().label : ""
+                iconText: root.primaryHandoff() && root.primaryHandoff().kind === "review" ? root.glyphs.review : root.glyphs.agent
+                background: Util.alpha(root.accent, 0.22)
+                bordered: true; foreground: root.ink; accent: root.accent; focusable: true; fontFamily: root.bodyFont; fontSize: Style.font.bodySmall
+                enabled: root.actionsEnabled && !root.agentBusy
+                tooltipText: !root.actionsEnabled ? "Check the current theme first" : root.primaryHandoff() && root.primaryHandoff().kind === "review" ? "Opens your agent for a thorough read-only review; it saves the write-up here" : "Opens your default agent in a new window with a prompt built from this report"
+                onClicked: root.agentRequested(root.primaryHandoff().kind, "", "window")
+            }
+            Ui.Button {
+                objectName: "agentReviewButton"
+                visible: !!root.primaryHandoff() && root.primaryHandoff().kind !== "review"
+                text: root.reviewLabel()
+                iconText: root.glyphs.review
+                bordered: true; foreground: root.ink; accent: root.accent; focusable: true; fontFamily: root.bodyFont; fontSize: Style.font.bodySmall
+                enabled: root.actionsEnabled && !root.agentBusy
+                tooltipText: "A thorough read-only review beyond the measured checks; it saves the write-up here"
+                onClicked: root.agentRequested("review", "", "window")
+            }
+            Ui.Button {
+                objectName: "agentCopyButton"
+                iconText: root.glyphs.copy
+                Accessible.name: tooltipText
+                foreground: root.muted; accent: root.accent; focusable: true; fontFamily: root.bodyFont; fontSize: Style.font.bodySmall
+                enabled: root.actionsEnabled && !root.agentBusy
+                tooltipText: root.primaryHandoff() ? "Copy the " + root.promptNoun(root.primaryHandoff().kind) + " prompt" : ""
+                onClicked: root.agentRequested(root.primaryHandoff().kind, "", "copy")
+            }
+            Ui.Button {
+                objectName: "agentPreviewButton"
+                iconText: root.glyphs.preview
+                selected: root.agentPreview !== ""
+                Accessible.name: tooltipText
+                foreground: root.muted; accent: root.accent; focusable: true; fontFamily: root.bodyFont; fontSize: Style.font.bodySmall
+                enabled: (root.actionsEnabled && !root.agentBusy) || root.agentPreview !== ""
+                tooltipText: root.agentPreview ? "Hide the prompt" : root.primaryHandoff() ? "Preview the exact " + root.promptNoun(root.primaryHandoff().kind) + " prompt the agent receives" : ""
+                onClicked: {
+                    if (root.agentPreview) root.previewClosed()
+                    else root.agentRequested(root.primaryHandoff().kind, "", "preview")
+                }
+            }
+            Text {
+                objectName: "agentMessage"
+                height: agentFixButton.height
+                verticalAlignment: Text.AlignVCenter
+                visible: text !== ""
+                text: root.agentNote
+                textFormat: Text.PlainText; color: root.muted; font.family: root.bodyFont; font.pixelSize: Style.font.bodySmall
+            }
+        }
         // Errors and paused checks belong next to the verdict, not below the fold.
         Rectangle {
             width: parent.width; visible: root.errorText !== ""
@@ -591,6 +739,63 @@ FocusScope {
             width: scroll.width - (scroll.overflowing ? Style.space(12) : 0)
             spacing: Style.space(8)
 
+            // The exact prompt, so nothing reaches the agent unseen.
+            Rectangle {
+                objectName: "agentPreviewBox"
+                width: parent.width; visible: root.agentPreview !== ""
+                height: visible ? previewText.implicitHeight + Style.space(20) : 0
+                radius: Style.space(8); color: "transparent"
+                border.width: 1; border.color: Util.alpha(root.accent, 0.4)
+                Text {
+                    id: previewText
+                    x: Style.space(12); y: Style.space(10); width: parent.width - Style.space(24)
+                    text: root.agentPreview
+                    textFormat: Text.PlainText; color: root.muted; font.family: Style.font.family; font.pixelSize: Style.font.bodySmall; wrapMode: Text.Wrap
+                }
+            }
+            // The agent's own write-up, when one was saved for this theme.
+            Rectangle {
+                id: reviewCard
+                objectName: "agentReviewCard"
+                width: parent.width
+                visible: !!root.report && (root.reviewText !== "" || root.reviewPending)
+                height: visible ? reviewColumn.implicitHeight : 0
+                radius: Style.space(8); color: root.surface
+                border.width: 1; border.color: Util.alpha(root.accent, root.reviewOutdated ? 0.2 : 0.45)
+                Column {
+                    id: reviewColumn
+                    width: parent.width
+                    Ui.Button {
+                        width: parent.width; height: reviewHead.implicitHeight + Style.space(20)
+                        text: ""; foreground: root.ink; accent: root.accent; focusable: true; leftAlign: true
+                        radius: Style.space(8)
+                        enabled: root.reviewText !== ""
+                        Accessible.name: "Agent review" + (root.reviewOpen ? ", expanded" : ", collapsed")
+                        onActiveFocusChanged: if (activeFocus) root.reveal(reviewCard)
+                        onClicked: root.reviewOpen = !root.reviewOpen
+                        Text { id: reviewGlyph; x: Style.space(14); y: Style.space(10); width: Style.space(18); text: root.glyphs.review; color: root.accent; font.family: root.bodyFont; font.pixelSize: Style.font.body }
+                        Column {
+                            id: reviewHead
+                            x: reviewGlyph.x + reviewGlyph.width + Style.space(6); y: Style.space(10)
+                            width: parent.width - x - Style.space(34)
+                            spacing: Style.space(3)
+                            Text { width: parent.width; text: "Agent review"; color: root.ink; font.family: root.bodyFont; font.pixelSize: Style.font.body; font.weight: Font.DemiBold }
+                            Text { objectName: "reviewByline"; width: parent.width; visible: text !== ""; text: root.reviewByline(); color: root.reviewOutdated ? root.warning : root.muted; font.family: root.bodyFont; font.pixelSize: Style.font.bodySmall; wrapMode: Text.Wrap }
+                            Text { width: parent.width; visible: !root.reviewOpen && root.reviewText !== ""; text: root.reviewSummary(root.reviewText); textFormat: Text.PlainText; color: root.muted; font.family: root.bodyFont; font.pixelSize: Style.font.bodySmall; wrapMode: Text.Wrap; maximumLineCount: 3; elide: Text.ElideRight }
+                        }
+                        Text { anchors.right: parent.right; anchors.rightMargin: Style.space(14); y: Style.space(10); visible: root.reviewText !== ""; text: root.reviewOpen ? root.glyphs.open : root.glyphs.closed; color: root.muted; font.family: root.bodyFont; font.pixelSize: Style.font.bodySmall }
+                    }
+                    Text {
+                        objectName: "reviewBody"
+                        visible: root.reviewOpen && root.reviewText !== ""
+                        x: Style.space(14); width: parent.width - Style.space(28)
+                        bottomPadding: Style.space(14)
+                        text: visible ? root.reviewMarkdown(root.reviewText) : ""
+                        textFormat: Text.MarkdownText
+                        color: root.ink; font.family: root.bodyFont; font.pixelSize: Style.font.bodySmall; wrapMode: Text.Wrap
+                    }
+                }
+            }
             Text {
                 width: parent.width; visible: !root.report
                 text: root.refreshing ? "Measuring your theme…" : "Press Refresh (or R) to check your theme."

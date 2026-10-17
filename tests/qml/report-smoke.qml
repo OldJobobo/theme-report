@@ -100,9 +100,43 @@ ShellRoot {
             var roles=finding("failure",{missingOrUnsupported:["background","accent"]});roles.ruleId="validity.roles";roles.summary="Foundational roles resolve"
             verify(panel.shortReason(roles)==="Missing or unsupported: background, accent.","failing check never shows pass wording")
             roles.evidence={};verify(panel.proof(roles)==="Foundational roles resolve","failing validity check falls back to its summary")
+            var agentCalls=[], previewClosings=0
+            panel.agentRequested.connect(function(k,r,m){ agentCalls.push(k+":"+r+":"+m) })
+            panel.previewClosed.connect(function(){ previewClosings++ })
+            panel.report=categoryReport; panel.agentName="Pi"
+            var fixButton=namedItem(panel,"agentFixButton")
+            verify(namedItem(panel,"agentActions").visible && fixButton.text==="Fix 1 issue with Pi","header handoff names the agent and the issue count")
+            fixButton.clicked(); namedItem(panel,"agentCopyButton").clicked(); namedItem(panel,"agentPreviewButton").clicked()
+            verify(agentCalls.join(",")==="fix::window,fix::copy,fix::preview","header handoff signals: "+agentCalls.join(","))
+            panel.agentName=""; verify(fixButton.text==="Choose an agent to fix 1 issue","no default agent")
+            panel.agentName="Pi"
+            panel.actionsEnabled=false; verify(!fixButton.enabled,"handoff disabled while stale or checking"); panel.actionsEnabled=true
+            panel.agentBusy=true; verify(!fixButton.enabled,"handoff disabled while one runs"); panel.agentBusy=false
+            var pausedOne=finding("unassessed",{runtimeContract:"partial"}); var note=finding("advisory"); note.ruleId="advisory.lua-syntax"
+            verify(panel.handoffKind(issue)==="fix" && panel.handoffKind(limited)==="measure" && panel.handoffKind(finding("pass"))==="" && panel.handoffKind(pausedOne)==="" && panel.handoffKind(note)==="","per-check handoff kinds")
+            panel.report=Object.assign({},categoryReport,{findings:[limited,finding("pass")]})
+            verify(panel.primaryHandoff().kind==="measure" && fixButton.text==="Ask Pi about 1 unmeasured","only unmeasured checks: ask about them")
+            var reviewButton=namedItem(panel,"agentReviewButton")
+            panel.report=categoryReport; verify(reviewButton.visible && reviewButton.text==="Review with Pi","review offered beside a fix")
+            reviewButton.clicked(); verify(agentCalls[agentCalls.length-1]==="review::window","review signal")
+            panel.report=Object.assign({},categoryReport,{findings:[finding("pass")],inputFingerprint:"fp1"})
+            verify(panel.primaryHandoff().kind==="review" && namedItem(panel,"agentActions").visible && fixButton.text==="Review with Pi" && !reviewButton.visible,"a passing theme still offers its agent: a review")
+            var card=namedItem(panel,"agentReviewCard"); verify(!card.visible,"no review card without a review")
+            panel.reviewAgentName="Pi"; panel.reviewMeta={agent:"pi",requestedAt:1,inputFingerprint:"fp1"}
+            verify(card.visible && panel.reviewPending && namedItem(panel,"reviewByline").text==="Waiting for Pi to save the review…" && fixButton.text==="Review again with Pi","requested review is pending")
+            panel.reviewText="# t: agent review\n\n## Summary\n\nWarm and *calm* overall.\n\n## Strengths\n\n- ok ![x](file:///etc/passwd) <img src=x>\n"
+            verify(!panel.reviewPending && panel.reviewSummary(panel.reviewText)==="Warm and calm overall." && !panel.reviewOutdated,"saved review summary")
+            verify(panel.reviewMarkdown(panel.reviewText).indexOf("passwd")<0 && panel.reviewMarkdown(panel.reviewText).indexOf("<img")<0 && panel.reviewMarkdown(panel.reviewText).indexOf("agent review")<0,"review markdown drops images, HTML and the title")
+            panel.report=Object.assign({},panel.report,{inputFingerprint:"fp2"}); verify(panel.reviewOutdated && namedItem(panel,"reviewByline").text.indexOf("theme changed since")>=0,"review marked out of date")
+            panel.reviewOpen=true; verify(namedItem(panel,"reviewBody").visible,"review opens")
+            panel.reviewText=""; panel.reviewMeta=null; panel.reviewOpen=false
+            panel.agentMessage="Prompt copied"; verify(panel.agentNote==="Prompt copied","handoff result shown")
+            panel.agentPreview="PROMPT"; verify(namedItem(panel,"agentPreviewBox").visible,"prompt preview shown")
+            panel.report=Object.assign({},categoryReport,{theme:"another-theme"}); verify(previewClosings===1,"a new theme closes the preview")
+            panel.agentPreview=""; panel.agentMessage=""
             panel.errorText="Analyzer error"; verify(namedItem(panel,"errorText").visible,"error shown in header"); panel.errorText=""
             verify(panel.safeColor("#aabbcc")==="#aabbcc" && String(panel.safeColor("red"))===String(panel.surface) && String(panel.safeColor("file:/etc/passwd"))===String(panel.surface),"safe swatches")
-            console.log("PASS: live theme palette/alpha/font, caution hue, quick-refresh stability, paused-check grouping/banner, header errors, subject cards/inline checks, category selection, failure wording, overview palette banks/roles/copy,  passing exploration, positive proof, shared/suppressed honesty, category filters/counts, refresh retention/reset, safe color previews")
+            console.log("PASS: live theme palette/alpha/font, caution hue, quick-refresh stability, paused-check grouping/banner, header errors, subject cards/inline checks, agent handoff actions, agent review card, category selection, failure wording, overview palette banks/roles/copy,  passing exploration, positive proof, shared/suppressed honesty, category filters/counts, refresh retention/reset, safe color previews")
         } catch (e) { console.error(String(e)) }
         Qt.callLater(function() { Qt.quit() })
     }

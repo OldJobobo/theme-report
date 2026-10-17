@@ -21,6 +21,11 @@ home = pathlib.Path(os.environ["HOME"])
 if "change-inputs" in sys.argv:
     (home / ".local/state/omarchy/current/theme/colors.toml").write_text("changed")
     sys.exit(0)
+if sys.argv[1:2] in (["agent"], ["prompt"]):
+    with (home / "agent-log").open("a") as log:
+        log.write(" ".join(sys.argv[1:]) + "\\n")
+    print("launched" if sys.argv[1] == "agent" else "PROMPT " + sys.argv[2])
+    sys.exit(0)
 with (home / "audit-count").open("a") as count:
     count.write("audit\\n")
 cache = pathlib.Path(os.environ["XDG_CACHE_HOME"]) / "theme-report"
@@ -42,6 +47,8 @@ print(json.dumps(report))
         (current / name).write_text("fixture")
     (home / ".config/omarchy").mkdir(parents=True)
     (home / ".config/omarchy/shell.toml").write_text("fixture")
+    (home / ".config/omarchy/defaults").mkdir(parents=True)
+    (home / ".config/omarchy/defaults/agent").write_text("pi\n")
     ui = base / "Ui"
     commons = base / "Commons"
     plugin = base / "Plugin"
@@ -94,6 +101,16 @@ Item {
     property string status
     property string errorText
     property bool refreshing
+    property string agentName
+    property bool agentBusy
+    property string agentMessage
+    property string agentPreview
+    property bool actionsEnabled
+    property string reviewText
+    property var reviewMeta
+    property string reviewAgentName
+    signal agentRequested(string kind, string rule, string mode)
+    signal previewClosed()
     objectName: "reportStub"
     property string category: ""
     function selectCategory(id) { category = id }
@@ -136,6 +153,7 @@ ShellRoot {
     Process { id: mark; command: ["sh", "-c", "echo $1 >> $HOME/audit-count", "sh", "ipc"] }
     Process { id: hideHelper; command: ["sh", "-c", "mv $HOME/.local/bin/theme-report $HOME/.local/bin/theme-report.off"] }
     Process { id: switchTheme; command: ["sh", "-c", "printf other > $HOME/.local/state/omarchy/current/theme.name"] }
+    Process { id: switchBack; command: ["sh", "-c", "printf fixture > $HOME/.local/state/omarchy/current/theme.name"] }
     Timer {
         interval: 700; running: true; repeat: true
         onTriggered: {
@@ -210,15 +228,45 @@ ShellRoot {
                 fakeBar.widgets = [second, first]
                 first.electAll()
                 if (!verify(second.ipcOwner && !first.ipcOwner, "ownership follows the bar's order")) return
-                hideHelper.running = true
+                if (!verify(second.startAgent("fix", "", "window") === "stale", "agent handoff refuses a result for another theme")) return
+                if (!verify(second.startAgent("bogus", "", "window") === "unknown" && second.startAgent("fix", "", "email") === "unknown", "unknown handoff kind or mode")) return
+                if (!verify(second.agentName === "Pi", "default agent name")) return
+                switchBack.running = true
+                stage = 20
+            } else if (stage === 20) {
+                if (!verify(!second.stale, "theme restored")) return
+                second.open()
+                if (!verify(second.startAgent("fix", "readability.bar", "window") === "started", "fixRule handoff starts")) return
+                if (!verify(second.agentBusy && second.startAgent("fix", "", "copy") === "busy", "a running handoff answers busy at once")) return
                 stage++
+            } else if (stage === 21) {
+                if (!verify(!second.agentBusy && second.agentMessage === "Opened Pi", "launch result: " + second.agentMessage)) return
+                if (!verify(!second.opened && !first.opened, "opening the agent closes the panel")) return
+                second.open()
+                if (!verify(second.startAgent("explain", "", "preview") === "started", "preview starts")) return
+                stage++
+            } else if (stage === 22) {
+                if (!verify(second.agentPreview === "PROMPT explain\\n" && second.agentMessage === "", "preview shows the analyzer's prompt")) return
+                if (!verify(JSON.parse(second.statusJson()).agent === "pi", "status names the default agent")) return
+                if (!verify(second.startAgent("fix", "", "copy") === "started", "copy starts")) return
+                stage++
+            } else if (stage === 23) {
+                if (!verify(second.agentMessage === "Prompt copied", "copy result: " + second.agentMessage)) return
+                if (!verify(second.opened, "preview and copy keep the panel open")) return
+                if (!verify(second.reviewText.indexOf("Saved review") === 0 && second.reviewMeta && second.reviewMeta.agent === "pi" && namedItem(second, "reportStub").reviewAgentName === "Pi", "a saved agent review reaches the panel")) return
+                if (!verify(second.startAgent("review", "", "window") === "started", "review handoff starts")) return
+                stage = 24
+            } else if (stage === 24) {
+                if (!verify(second.agentMessage === "Opened Pi" && !second.opened, "review opens the agent and closes the panel")) return
+                hideHelper.running = true
+                stage = 11
             } else if (stage === 11) {
                 if (!verify(second.startCheck(false) === "started", "check without the analyzer starts")) return
                 stage++
             } else if (stage === 12) {
                 var failed = JSON.parse(second.statusJson())
                 if (!verify(!second.checking && !first.checking && failed.checking === false && String(failed.error).indexOf("Could not start") === 0, "missing analyzer clears busy and reports an error")) return
-                console.log("PASS: startup idle, open-only audits, explicit Refresh, shared cached result, stale badge, no queued work, close cancellation, IPC ownership/routing/status/check")
+                console.log("PASS: startup idle, open-only audits, explicit Refresh, shared cached result, stale badge, no queued work, close cancellation, IPC ownership/routing/status/check/agent")
                 Qt.quit()
             }
         }
@@ -228,23 +276,28 @@ ShellRoot {
 ''')
     cache = base / "cache/theme-report"
     cache.mkdir(parents=True)
+    (cache / "reviews").mkdir()
+    (cache / "reviews/fixture.md").write_text("Saved review")
+    (cache / "reviews/fixture.json").write_text('{"agent": "pi", "requestedAt": 1}')
     (cache / "current.json").write_text("{}")
     runtime = base / "runtime"
     runtime.mkdir(mode=0o700)
     env = dict(os.environ, HOME=str(home), XDG_CACHE_HOME=str(base / "cache"),
                XDG_RUNTIME_DIR=str(runtime), QT_QPA_PLATFORM="offscreen")
     result = subprocess.run(["quickshell", "-p", str(base)], env=env, text=True,
-                            capture_output=True, timeout=10)
+                            capture_output=True, timeout=20)
     output = result.stdout + result.stderr
     assert result.returncode == 0 and "PASS: startup" in output and "FAIL:" not in output, output
     counts = (home / "audit-count").read_text().splitlines()
     # Exactly four panel audits before IPC, then exactly one background check (the busy call starts nothing).
     assert counts[:counts.index("ipc")] == ["audit"] * 4, output
     assert counts[counts.index("ipc") + 1:counts.index("ipc-panel")] == ["audit"], counts
+    # Each handoff ran the analyzer once with exact arguments; none of them audited.
+    assert (home / "agent-log").read_text().splitlines() == ["agent fix --window --rule readability.bar", "prompt explain", "prompt fix", "agent review --window"], (home / "agent-log").read_text()
     main = (ROOT / "plugin/Main.qml").read_text()
     assert not any(token in main for token in
                    ["Component.onCompleted", "Timer", "queued", "freshnessExpiry"]), "Automatic audits must remain absent"
     # File views only display published results; they never start the analyzer.
     for block in main.split("FileView {")[1:]:
         assert "request(" not in block.split("\n    }")[0] and "running = true" not in block.split("\n    }")[0]
-    print("PASS: open-only audit regression and IPC (real Process, two widgets, exact invocation counts, cancellation, single IPC owner, focused routing)")
+    print("PASS: open-only audit regression and IPC (real Process, two widgets, exact invocation counts, cancellation, single IPC owner, focused routing, agent handoffs)")
