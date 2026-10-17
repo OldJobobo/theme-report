@@ -78,12 +78,36 @@ omarchy-shell oldjobobo.theme-report status | jq .
 | `refresh` | `started` / `busy` | Like `check`, but always a full re-audit |
 | `status` | JSON | Last result, described below |
 | `grade` | badge text | `B`, `B*`, `~B` or `?` |
+| `askAgent <kind>` | `started` / `busy` / `no-report` / `stale` / `unknown` | Open your default agent with a `fix`, `measure`, `explain` or `review` prompt for the last result |
+| `fixRule <ruleId>` | same | Open your agent on one check, e.g. `readability.bar` |
+| `copyPrompt <kind>` | same | Copy the prompt to the clipboard |
 
-`status` returns `theme`, `activeTheme`, `badge`, `grade`, `state` (`ready`, `provisional`, `not-graded` or `not-audited`), `stale`, `summary`, `problems`, `cautions`, `limitations`, `runtime` (the runtime contract status), `checkedAt` (Unix seconds), `analyzerVersion`, `checking`, `open`, and `error` (the open panel's or the last background check's error, otherwise `null`). `check` and `refresh` return immediately; poll `status` until `checking` is false to read the outcome.
+`status` returns `theme`, `activeTheme`, `badge`, `grade`, `state` (`ready`, `provisional`, `not-graded` or `not-audited`), `stale`, `summary`, `problems`, `cautions`, `limitations`, `runtime` (the runtime contract status), `checkedAt` (Unix seconds), `analyzerVersion`, `checking`, `open`, and `error` (the open panel's or the last background check's error, otherwise `null`). `check` and `refresh` return immediately; poll `status` until `checking` is false to read the outcome. `status` also reports `agent` (the default agent's command name) and `agentMessage` (the last handoff's result, such as `Opened Pi` or an error). The agent methods also return immediately, and they refuse a result that belongs to a theme you have since switched away from (`stale`). To get the prompt text in a script, use `theme-report prompt <kind>`.
 
 The bar creates one widget copy per monitor. Exactly one copy (the first the bar lists) owns the target, so calls are never split between copies, and ownership moves if that copy goes away. `open`, `toggle` and `openCategory` use the shell's own focused-monitor routing (`omarchy-shell shell toggle oldjobobo.theme-report` reaches the same place). The target exists only while the widget is on a bar. `check` and `refresh` are explicit requests: the widget still never audits by itself in the background.
 
 To bind a key, run the command from your Hyprland binding, for example `omarchy-shell oldjobobo.theme-report toggle`.
+
+## Agent handoff
+
+`theme-report prompt <fix|measure|explain> [--rule <id>]` prints a prompt built from the last current-theme report (`~/.cache/theme-report/current.json`). It refuses a report for a theme you have since switched away from. `theme-report agent <kind> [--rule <id>] [--copy]` opens your Omarchy default agent with that prompt in a new terminal window (app-id `org.omarchy.agent`), started in the theme's folder; `--copy` copies the prompt instead. With no default agent chosen, it opens Omarchy's agent picker and answers `no-agent`.
+
+- `fix` covers problems and cautions; `measure` covers checks that could not be measured; `explain` is read-only.
+- `review` asks for a thorough read-only review beyond the measured checks, saved as Markdown to `~/.cache/theme-report/reviews/<theme>.md`. Launching one (`theme-report agent review`) moves any earlier review to `<theme>.previous.md` and records the request in `<theme>.json` (agent, time, and the report's input fingerprint). The panel uses that record to show the review as pending, then as out of date once the theme's inputs change. `--rule` does not apply to a review.
+- The editable source is the theme's folder in `~/.config/omarchy/themes` (symlinks followed) or, for stock themes, `$OMARCHY_PATH/themes`. A theme inside a git repository (its own, or a collection of themes) is edited in place on a new `theme-report/fix-<date>` branch. A repository that also holds the whole themes folder, such as a dotfiles repository, does not count. Anything else is copied to `<name>-tuned` first.
+- Each prompt writes the report it describes to `~/.cache/theme-report/handoff/` (private to you; the newest 10 are kept) and tells the agent to treat it as data. Theme-controlled text such as wallpaper names stays in that file and out of the prompt. Theme names with unusual characters are refused.
+
+**Agent skill.** `install.sh --with-skill` installs `skills/theme-report/SKILL.md` to `~/.local/share/theme-report/skills/theme-report/` (the copy prompts cite) and into each agent skill folder that exists: `~/.agents/skills`, `~/.claude/skills`, `~/.codex/skills`, `~/.pi/agent/skills`, `~/.gemini/config/skills` and `~/.hermes/skills`. Linked folders are skipped. Like every installed file, the copies are receipt-owned, kept on later updates, and removed by uninstall.
+
+**Personal design skills.** Theme Report gives no design guidance. To have prompts point your agent at your own design skills, list them in `~/.config/theme-report/agent.toml`:
+
+```toml
+[[design_skill]]
+name = "my-theme-design"
+path = "~/.agents/skills/my-theme-design/SKILL.md"
+```
+
+Prompts name each listed skill that exists, with its path, and never read or copy its contents. Fix and explain prompts use them for design decisions beyond the targets; review prompts use them for how to review. The file is yours: the installer never writes it.
 
 ## Uninstall
 

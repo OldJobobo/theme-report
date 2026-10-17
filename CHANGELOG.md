@@ -1,5 +1,18 @@
 # Changelog
 
+## 0.8.0
+
+Hand the report to your Omarchy default agent.
+
+- **Panel.** "Fix N issues with Pi" (using your chosen agent) opens the agent in a new window with a prompt built from the measurements. Expanded checks can fix just that check, unmeasured checks can be asked about, and "Copy prompt" and "Preview" show the exact text instead of launching. With no agent chosen, the button opens Omarchy's picker. The panel closes once the agent window or picker opens.
+- **CLI.** `theme-report prompt <fix|measure|explain> [--rule <id>]` prints the prompt; `theme-report agent <kind> [--rule <id>] [--copy]` launches or copies it.
+- **IPC.** `askAgent <kind>`, `fixRule <ruleId>` and `copyPrompt <kind>`; `status` reports `agent` and `agentMessage`.
+- **Limits in every prompt.** The agent edits only the theme source: in place on a new branch when the theme is in a git repository, otherwise in a `<name>-tuned` copy, and stock themes are always copied. It never touches wallpapers or the applied theme, states its plan first, and asks before applying. Theme-controlled text stays in a private handoff file the prompt marks as data.
+- **Agent skill.** `install.sh --with-skill` installs a `theme-report` skill into the agent skill folders that exist.
+- **Agent review.** "Review with Pi" (offered on every theme, including passing ones) asks for a thorough read-only review beyond the measured checks. The agent saves a Markdown write-up, and the panel shows it as an "Agent review" card, pending while the agent works and marked out of date once the theme changes. `theme-report prompt|agent review` and IPC `askAgent review` do the same.
+- **Header.** The agent row is always shown. Its main button is tinted with the theme's accent and reads "Fix all N issues", "Ask about N unmeasured" or "Review". Copy and Preview are icons whose tooltips name the prompt they act on.
+- **Personal design skills.** List your own skills in `~/.config/theme-report/agent.toml` and prompts point the agent at them by name and path. Theme Report itself ships no design guidance.
+
 ## 0.7.0
 
 Full IPC support on `oldjobobo.theme-report`.
@@ -9,7 +22,7 @@ Full IPC support on `oldjobobo.theme-report`.
 - New: `openCategory <id>`, `check` and `refresh` (a background re-check that updates every badge without opening the panel), `status` (JSON) and `grade` (badge text).
 - Every method answers with a string, and a busy check answers `busy` immediately.
 
-Report card redesign of the panel. No change to the report data or grading.
+Also in 0.7.0, a report card redesign of the panel. No change to the report data or grading.
 
 - Each area is a card with its letter grade, a score meter and a one-line summary. Its checks are listed inline, so clicking an area no longer filters a list below the fold. Areas with problems or cautions open on their own, and passed checks fold into one row.
 - The Issues / Passed / Limitations / Notes tabs are gone. "Limitations" now reads "not measured".
