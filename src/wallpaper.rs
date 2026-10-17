@@ -24,6 +24,11 @@ pub fn thumbnail_tool() -> &'static str {
     "magick"
 }
 pub fn backend_identity() -> String {
+    // Probed once per process: capture can run several times per audit.
+    static IDENTITY: std::sync::OnceLock<String> = std::sync::OnceLock::new();
+    IDENTITY.get_or_init(probe_identity).clone()
+}
+fn probe_identity() -> String {
     let mut cmd = Command::new(thumbnail_tool());
     cmd.arg("-version");
     let identity = crate::video::run(cmd, Duration::from_secs(2), 16384)
@@ -35,8 +40,7 @@ pub fn backend_identity() -> String {
     )
 }
 pub fn sample(bytes: &[u8], cache: &Path) -> Result<Samples> {
-    fs::create_dir_all(cache)?;
-    let mut file = tempfile::NamedTempFile::new_in(cache)?;
+    let mut file = tempfile::NamedTempFile::new_in(crate::cache::staging(cache)?)?;
     file.write_all(bytes)?;
     file.flush()?;
     sample_path(file.path(), cache)
@@ -80,9 +84,12 @@ fn managed_thumbnail(path: &Path, cache: &Path, reason: &str) -> Result<Samples>
     let coder = match image::guess_format(&header[..count])? {
         image::ImageFormat::Jpeg => "JPEG",
         image::ImageFormat::Png => "PNG",
-        _ => bail!("unsupported-image: managed thumbnails support PNG/JPEG only"),
+        image::ImageFormat::WebP => "WEBP",
+        _ => bail!("unsupported-image: managed thumbnails support PNG/JPEG/WebP only"),
     };
-    let mut profile = tempfile::Builder::new().suffix(".icc").tempfile_in(cache)?;
+    let mut profile = tempfile::Builder::new()
+        .suffix(".icc")
+        .tempfile_in(crate::cache::staging(cache)?)?;
     profile.write_all(SRGB_PROFILE)?;
     profile.flush()?;
     let mut command = Command::new(thumbnail_tool());
@@ -156,13 +163,15 @@ fn managed_thumbnail(path: &Path, cache: &Path, reason: &str) -> Result<Samples>
     })
 }
 fn sample_native(path: &Path) -> Result<Vec<Color>> {
-    let mut child = Command::new(std::env::current_exe()?)
+    let mut command = Command::new(std::env::current_exe()?);
+    command
         .arg("decode-image")
         .arg(path)
         .stdin(Stdio::null())
         .stdout(Stdio::piped())
-        .stderr(Stdio::null())
-        .spawn()?;
+        .stderr(Stdio::null());
+    crate::video::die_with_parent(&mut command);
+    let mut child = command.spawn()?;
     let deadline = Instant::now() + Duration::from_secs(6);
     loop {
         if let Some(status) = child.try_wait()? {
@@ -239,8 +248,22 @@ pub fn decode(path: &Path) -> Result<Vec<Color>> {
         bail!("image byte limit")
     }
     let format = image::guess_format(&bytes).context("unsupported-image: unknown format")?;
-    if !matches!(format, image::ImageFormat::Png | image::ImageFormat::Jpeg) {
-        bail!("unsupported-image: static PNG/JPEG only")
+    if !matches!(
+        format,
+        image::ImageFormat::Png | image::ImageFormat::Jpeg | image::ImageFormat::WebP
+    ) {
+        bail!("unsupported-image: static PNG/JPEG/WebP only")
+    }
+    if format == image::ImageFormat::WebP {
+        // RIFF....WEBPVP8X with flags at byte 20: 0x02 animation, 0x20 ICC profile.
+        if bytes.len() >= 21 && &bytes[12..16] == b"VP8X" {
+            if bytes[20] & 0x02 != 0 {
+                bail!("unsupported-image: animated WebP")
+            }
+            if bytes[20] & 0x20 != 0 {
+                bail!("unsupported-image: embedded ICC profile")
+            }
+        }
     }
     if format == image::ImageFormat::Png {
         let mut position = 8usize;

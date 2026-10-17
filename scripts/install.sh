@@ -38,15 +38,26 @@ for rel in "${paths[@]}" "$plugin/.theme-report-owned"; do
   fi
   if $dry; then printf 'Would install: %s\n' "$target"; else printf 'Install target: %s\n' "$target"; fi
 done
+"$binary" version >/dev/null 2>&1 || { echo "Cannot run $binary on this system (wrong architecture or damaged build)." >&2; exit 1; }
 $dry && exit 0
+updating=false
+[[ -f $receipt ]] && updating=true
 mkdir -p -- "$(dirname -- "$receipt")"
 tmp=$(mktemp -- "${receipt}.XXXXXX")
 trap 'rm -f -- "$tmp"' EXIT
+# Own both the previous and the new content before copying anything, so an interrupted
+# install can be re-run or uninstalled instead of reporting its own files as unowned.
+if $updating; then cat -- "$receipt" > "$tmp"; fi
+for i in "${!paths[@]}"; do
+  h=$(sha256sum -- "${sources[$i]}"); printf '%s\t%s\n' "${h%% *}" "${paths[$i]}" >> "$tmp"
+done
+mv -- "$tmp" "$receipt"
+tmp=$(mktemp -- "${receipt}.XXXXXX")
 # Preserve ownership of an installed optional hook during an update without --with-hook.
 oldhook=.config/omarchy/hooks/theme-set.d/theme-report
-if ! $hook && [[ -f $receipt && -f $root/$oldhook ]]; then
+if ! $hook && [[ -f $root/$oldhook ]]; then
   h=$(sha256sum -- "$root/$oldhook"); h=${h%% *}
-  grep -Fqx -- "$h"$'\t'"$oldhook" "$receipt" && printf '%s\t%s\n' "$h" "$oldhook" >> "$tmp"
+  if grep -Fqx -- "$h"$'\t'"$oldhook" "$receipt"; then printf '%s\t%s\n' "$h" "$oldhook" >> "$tmp"; fi
 fi
 for i in "${!paths[@]}"; do
   target="$root/${paths[$i]}"
@@ -58,5 +69,11 @@ for i in "${!paths[@]}"; do
   printf '%s\t%s\n' "$h" "${paths[$i]}" >> "$tmp"
 done
 mv -- "$tmp" "$receipt"
-echo "Installed project-owned files. Rescan: omarchy-shell shell rescanPlugins"
-echo "Then enable: omarchy plugin enable oldjobobo.theme-report"
+if $updating; then
+  echo "Updated project-owned files."
+  # Replacing QML under a running shell can crash Quickshell; load it with a clean restart.
+  echo "Load the new plugin code: omarchy restart shell"
+else
+  echo "Installed project-owned files. Rescan: omarchy-shell shell rescanPlugins"
+  echo "Then enable: omarchy plugin enable oldjobobo.theme-report"
+fi

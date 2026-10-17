@@ -1,19 +1,32 @@
 # Supported runtime
 
-Profile: `quattro-shell-2026-v1`. This is an explicit, conservative contract, not support for all Omarchy 4 builds.
+Profile: `quattro-shell-2026-v1`.
 
-Read-only inspection covered host `4.0.0.r6720.g8e02fc8-1` and VM `4.0.4-1`. Current audits match exact palette singleton (`ShellColor.qml` when present, otherwise `Color.qml`), `Style.qml`, shell-template, and palette-fallback hashes in `src/inputs.rs`; unknown combinations produce unassessed checks. v0.4.3 adds the reviewed Qt 6.12 variants: `Commons.Color`-qualified references in the installed runtime and the upstream `ShellColor` rename at commit `eeff52bc`. Inspection confirmed only namespace/reference/comment changes to Style, with unchanged color/state defaults; the palette singleton content, template, palette fallback script, and geometry are unchanged. The profile is pinned to these inspected contracts. Geometry source is fingerprinted; native gradients are sampled across stops/segments, never scored as a flattened color; unsupported formats remain limitations.
+## Runtime verification
 
-v0.5.2 additionally recognizes the exact installed contract in `omarchy-dev 4.0.0.r6866.g77bfaca-2`. Read-only comparison against `eeff52bc` and the package sources confirmed:
+Current audits mirror five pieces of Omarchy runtime behavior. Each is verified separately from a normalized extract of only the code and defaults it depends on. Whitespace and comments are ignored; whole named functions and the relevant declaration lines are kept.
 
-- `Color.qml` removes the image-picker scrim; foundational palette loading and all assessed surface defaults are unchanged. Image-picker scrim contrast is not a scored measurement.
-- `Style.qml` uses `Commons.Color` references and adds `[bar] notch-height`; assessed control-state defaults are unchanged.
-- `shell.toml.tpl` removes the image-picker scrim keys. Current audits consume materialized theme files, not template rendering.
-- Palette fallback script and border geometry are unchanged.
+| Behavior | Source | Extract |
+| --- | --- | --- |
+| Palette loading | `Color.qml` / `ShellColor.qml` | `loadColors` |
+| Surface defaults | `Color.qml` / `ShellColor.qml` | `pick`, `pickAlpha`, `flatColor`, `composed` and every `root.composed(...)` / `root.pick(...)` declaration |
+| Control states | `Style.qml` | style token helpers, `*StateColor`, `*FillFor`, and `styleAlpha/String/Num("…")` declarations |
+| Template defaults | `default/themed/shell.toml.tpl` | literal values (template expressions excluded) |
+| Selection fallbacks | `bin/omarchy-theme-color` | `[[ … ]] ||` fallback assignments |
 
-The new palette/style/template/fallback combination is pinned as one complete tuple, not independent allowlists. Unknown files and old/new mixed tuples remain unsupported. The analyzer/plugin version advances to 0.5.2 so cached unsupported results are invalidated; schema v2 and ruleset 5 remain unchanged. Building this source does not update an installed helper or plugin.
+Rule groups and what they need:
 
-Sources: installed `/usr/share/omarchy/shell/Commons/Color.qml`, `Style.qml`, `BorderGeometry.js`; `/usr/share/omarchy/default/themed/shell.toml.tpl`; `/usr/share/omarchy/shell/Ui/Panel.qml`, `KeyboardPanel.qml`, `WidgetButton.qml`; first-party monitor/tailscale plugin manifests and panel implementations; the theme-set and hook runner commands.
+- **Palette** (`validity.*`, `readability.foundation`, `semantic.accent`, `semantic.error-indicator`): palette loading.
+- **Selection** (`readability.selection`, `semantic.selection`): palette loading and selection fallbacks.
+- **Shell** (all other scored rules): palette loading, surface defaults, control states and template defaults.
+
+Status is `reviewed` when the files exactly match a reviewed tuple (the original whole-file pins in `src/contract.rs`), `compatible` when every extract matches a reviewed extract, `partial` when palette loading is verified but something else is not, and `unsupported` otherwise. Checks whose group is unverified are unassessed with the reason "Paused: Omarchy changed how this is rendered". Nothing is guessed. If palette loading is unverified, every check pauses so a grade never rests on parse/decode checks alone.
+
+Reviewed runtimes: Omarchy `eeff52bc` (Qt 6.12 `ShellColor` rename) and `omarchy-dev 4.0.0.r6866.g77bfaca` are recorded as exact tuples and extracts. `4.0.0.r7017.g84cfb93` verifies as `compatible`: its `Style.qml` change adds bar icon tokens outside every extract.
+
+`theme-report runtime [--omarchy-root DIR]` prints the status, which behaviors are verified, and the extract hashes. To review a new Omarchy build: inspect the changed extract's diff against the last reviewed revision, confirm the analyzer's model still matches, then add the printed hash to the matching `KNOWN_*` list in `src/contract.rs`.
+
+Sources consulted for the profile: `shell/Commons/Color.qml`, `Style.qml`, `BorderGeometry.js`; `default/themed/shell.toml.tpl`; `shell/Ui/Panel.qml`, `KeyboardPanel.qml`, `WidgetButton.qml`; first-party plugin manifests; the theme-set and hook runner commands. `BorderGeometry.js` is fingerprinted for caching but not gated.
 
 ## Resolution
 
@@ -29,12 +42,12 @@ Sources: installed `/usr/share/omarchy/shell/Commons/Color.qml`, `Style.qml`, `B
 
 The verified plugin uses `manifest.json`, `kinds: ["bar-widget"]`, and `entryPoints.barWidget`. Its entry component extends `qs.Ui.Panel`, owns a `WidgetButton` and a `KeyboardPanel`, and receives `bar`, `moduleName`, and `settings`. Shared imports are supplied by the native plugin host. The badge inherits the bar foreground/background/transparency without an emergency skin; the report panel follows live popup colors/alpha and shared font/control tokens. The current analyzer report schema is v2 (the native plugin manifest schema remains v1).
 
-The hook is a script in `~/.config/omarchy/hooks/theme-set.d/`, receiving the theme slug as `$1`. It launches the same analyzer asynchronously. Theme application is not coupled to report completion.
+The hook is a script in `~/.config/omarchy/hooks/theme-set.d/`, receiving the theme slug as `$1`. It launches the same analyzer asynchronously. Theme application is not coupled to report completion. The badge picks up the hook's published result.
 
-No durable completed-generation token was established for all supported builds. Capture consistency uses content manifests around capture and before publication. This is best-effort detection, not an atomic compositor snapshot. The UI invalidates on watched changes and revalidates through the helper; it never claims freshness from the slug alone.
+No durable completed-generation token was established for all supported builds. Capture consistency uses metadata manifests (size, times, inode, link target) taken before reading and re-checked after capture and after analysis. This is best-effort detection, not an atomic compositor snapshot. The badge marks a result whose theme name differs from `theme.name` as stale (`~`); it never audits on its own.
 
 ## Not implemented as runtime measurements
 
-No Lua execution or syntax certification; no QML evaluation; no application-content capture; no gradient/blur simulation; no animation analysis; no display transforms. Lua syntax gets a zero-budget advisory. Wallpaper output explicitly identifies a fixed unblurred stress model, not the rendered lock/launcher.
+No Lua execution or syntax certification; no QML evaluation (runtime behavior is verified from source extracts, never executed); no application-content capture; no gradient/blur simulation; no animation analysis; no display transforms. Lua syntax gets a zero-budget advisory. Wallpaper output explicitly identifies a fixed unblurred stress model, not the rendered lock/launcher.
 
 The initial ruleset is experimental. Its perceptual thresholds are transparent engineering policy with synthetic boundary tests, not scientifically validated universal thresholds. Broader real-theme calibration is a release gate, not implied by successful compilation.

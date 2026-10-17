@@ -30,10 +30,31 @@ FocusScope {
     readonly property color surface: Style.normalFillFor(ink, accent)
     readonly property color background: themeColors.popups.background
     readonly property color accent: themeColors.accent
-    readonly property color warning: themeColors.accent
+    // Cautions need their own hue: many themes (and Omarchy's default) use one color for
+    // accent and text. Prefer the theme's own yellow when it is readable on the popup.
+    readonly property color warning: {
+        var best = null, bestContrast = 3
+        ;["yellow", "color3", "color11"].forEach(function(key) {
+            if (!root.validPaletteColor(root.paletteColors[key])) return
+            var candidate = root.hexColor(root.paletteColors[key])
+            var c = root.contrastOf(candidate, root.background)
+            if (c >= bestContrast) { best = candidate; bestContrast = c }
+        })
+        return best || Qt.tint(themeColors.urgent, Qt.rgba(ink.r, ink.g, ink.b, 0.35))
+    }
     readonly property color failure: themeColors.urgent
     readonly property string bodyFont: Style.font.family
-    readonly property bool previous: refreshing || errorText !== ""
+    // A quick cache-backed check should not flash "Previous result" on every open.
+    property bool slowRefresh: false
+    readonly property bool previous: (refreshing && slowRefresh) || errorText !== ""
+    readonly property var contract: report && report.runtimeContract ? report.runtimeContract : null
+    readonly property bool runtimePaused: !!contract && (contract.status === "partial" || contract.status === "unsupported")
+    onRefreshingChanged: {
+        slowRefresh = false
+        if (refreshing) slowRefreshTimer.restart()
+        else slowRefreshTimer.stop()
+    }
+    Timer { id: slowRefreshTimer; interval: 350; onTriggered: root.slowRefresh = true }
     signal refreshRequested()
     signal closeRequested()
 
@@ -144,6 +165,24 @@ FocusScope {
         else expandedRules = copy
     }
     function validPaletteColor(value) { return /^#[0-9a-f]{6}$/i.test(String(value)) }
+    function hexColor(value) {
+        var n = parseInt(String(value).slice(1), 16)
+        return Qt.rgba(((n >> 16) & 255) / 255, ((n >> 8) & 255) / 255, (n & 255) / 255, 1)
+    }
+    function luminance(c) {
+        function channel(v) { return v <= 0.04045 ? v / 12.92 : Math.pow((v + 0.055) / 1.055, 2.4) }
+        return 0.2126 * channel(c.r) + 0.7152 * channel(c.g) + 0.0722 * channel(c.b)
+    }
+    function contrastOf(a, b) {
+        var x = luminance(a), y = luminance(b)
+        return (Math.max(x, y) + 0.05) / (Math.min(x, y) + 0.05)
+    }
+    function displayName(slug) {
+        return String(slug).replace(/[-_]+/g, " ").replace(/(^|\s)\S/g, function(c) { return c.toUpperCase() })
+    }
+    function severityLabel(f) {
+        return f.severity === "failure" ? "Needs fixing" : f.severity === "caution" ? "Worth checking" : f.severity === "unassessed" ? "Limitation" : f.severity === "pass" && !(f.evidence && f.evidence.referenceDefectOwnedByReadability) ? "Passed" : "Note"
+    }
     function safeColor(value) { return validPaletteColor(value) ? value : root.surface }
     function paletteRows() {
         var normal = [], bright = []
@@ -191,19 +230,31 @@ FocusScope {
     }
     function filteredFindings() {
         if (!report) return []
-        return report.findings.filter(function(f) { return belongs(f, selectedGroup) && (!selectedCategory || f.category === selectedCategory) }).sort(function(a,b) { return (a.severity === "failure" ? 0 : 1) - (b.severity === "failure" ? 0 : 1) || root.report.findings.indexOf(a) - root.report.findings.indexOf(b) })
+        var list = report.findings.filter(function(f) { return belongs(f, selectedGroup) && (!selectedCategory || f.category === selectedCategory) }).sort(function(a,b) { return (a.severity === "failure" ? 0 : 1) - (b.severity === "failure" ? 0 : 1) || root.report.findings.indexOf(a) - root.report.findings.indexOf(b) })
+        // Checks paused for the same runtime reason read as one card, not a wall of copies.
+        var paused = list.filter(function(f) { return f.evidence && f.evidence.runtimeContract })
+        if (paused.length < 2) return list
+        return [{
+            ruleId: "runtime.paused", category: "", severity: "unassessed", method: "resolved-token", policySuppressed: false,
+            summary: paused[0].summary,
+            evidence: { reason: paused[0].evidence.reason, pausedChecks: paused.map(function(f) { return f.ruleId }) },
+            sources: [],
+            remediation: paused[0].remediation + " Paused: " + paused.map(function(f) { return root.title(f.ruleId) }).join(", ") + "."
+        }].concat(list.filter(function(f) { return paused.indexOf(f) < 0 }))
     }
     function categoryName(id) {
         return {validity:"Theme integrity",readability:"Text & contrast",semantic:"State distinction",shell:"Shell surfaces",wallpaper:"Wallpaper resilience"}[id] || id
     }
     function title(id) {
-        return {"validity.palette":"Palette file", "validity.roles":"Required colors", "validity.shell":"Shell configuration", "validity.backgrounds":"Wallpaper media", "readability.foundation":"Primary text", "readability.selection":"Terminal selection", "readability.bar":"Status bar", "readability.popups":"Popup text", "readability.notifications":"Notifications", "readability.menu.selected":"Menu selection", "readability.launcher.selected":"Launcher selection", "readability.polkit":"Authentication prompt", "readability.lock":"Lock screen text", "readability.tooltip":"Tooltip text", "semantic.accent":"Accent distinction", "semantic.error-indicator":"Error indicator", "semantic.selection":"Selection colors", "shell.selected-fill":"Selected surface", "shell.focus-fill":"Focus surface", "shell.popup-border":"Popup boundaries", "wallpaper.lock-model":"Lock screen over wallpaper", "wallpaper.launcher-model":"Launcher over wallpaper", "advisory.lua-syntax":"Lua validation"}[id] || id
+        return {"validity.palette":"Palette file", "validity.roles":"Required colors", "validity.shell":"Shell configuration", "validity.backgrounds":"Wallpaper media", "readability.foundation":"Primary text", "readability.selection":"Terminal selection", "readability.bar":"Status bar", "readability.popups":"Popup text", "readability.notifications":"Notifications", "readability.menu.selected":"Menu selection", "readability.launcher.selected":"Launcher selection", "readability.polkit":"Authentication prompt", "readability.lock":"Lock screen text", "readability.tooltip":"Tooltip text", "semantic.accent":"Accent distinction", "semantic.error-indicator":"Error indicator", "semantic.selection":"Selection colors", "shell.selected-fill":"Selected surface", "shell.focus-fill":"Focus surface", "shell.popup-border":"Popup boundaries", "wallpaper.lock-model":"Lock screen over wallpaper", "wallpaper.launcher-model":"Launcher over wallpaper", "advisory.lua-syntax":"Lua validation", "advisory.user-shell":"Your shell overrides", "runtime.paused":"Checks paused for this Omarchy build"}[id] || id
     }
     function shortReason(f) {
         var reason = f.evidence.reason || ""
         if (f.severity === "unassessed") {
             if (f.evidence.unsupported && f.evidence.unsupported.length) {
                 if (f.evidence.unsupported.some(function(s) { return String(s).indexOf("snapshot byte limit") >= 0 })) return "At least one wallpaper exceeds the analyzer’s input limit. It stays untouched; dependent checks are not graded."
+                if (f.evidence.unsupported.some(function(s) { return String(s).indexOf("wallpapers in the set") >= 0 })) return "This theme has more wallpapers than one check samples. Expand to see which were skipped."
+                if (f.evidence.unsupported.some(function(s) { return String(s).indexOf("outside the theme") >= 0 })) return "A wallpaper links outside the theme folder, so it was not read."
                 return "Some wallpapers could not be sampled. Expand for format, decoder, or size limits."
             }
             return reason || "The current model cannot establish this check. It does not count as a pass or a failure."
@@ -266,7 +317,7 @@ FocusScope {
                 onClicked: root.refreshRequested()
             }
         }
-        Text { width: parent.width; text: root.report ? root.report.theme.replace(/-/g, " ") : "Your theme, examined"; textFormat: Text.PlainText; color: root.ink; font.family: root.bodyFont; font.pixelSize: Style.font.heading * 1.25; font.weight: Font.DemiBold; wrapMode: Text.Wrap }
+        Text { width: parent.width; text: root.report ? root.displayName(root.report.theme) : "Your theme, examined"; textFormat: Text.PlainText; color: root.ink; font.family: root.bodyFont; font.pixelSize: Style.font.heading * 1.25; font.weight: Font.DemiBold; wrapMode: Text.Wrap }
         Row {
             width: parent.width
             spacing: Style.space(16)
@@ -282,6 +333,14 @@ FocusScope {
             }
         }
         Text { width: parent.width; visible: !!root.report; text: root.counts(); color: root.muted; font.family: root.bodyFont; font.pixelSize: Style.font.bodySmall; wrapMode: Text.Wrap }
+        // Errors and paused checks belong next to the verdict, not below the fold.
+        Text { objectName: "errorText"; width: parent.width; visible: root.errorText !== ""; text: root.errorText; textFormat: Text.PlainText; color: root.warning; font.family: root.bodyFont; font.pixelSize: Style.font.bodySmall; wrapMode: Text.Wrap }
+        Text {
+            objectName: "runtimeBanner"
+            width: parent.width; visible: root.runtimePaused && !root.previous
+            text: root.contract ? (root.contract.palette ? "Some checks are paused: " : "Checks are paused: ") + "this Omarchy build changed " + (root.contract.unverified || []).join(", ") + ". Update theme-report to measure them; nothing is guessed meanwhile." : ""
+            textFormat: Text.PlainText; color: root.warning; font.family: root.bodyFont; font.pixelSize: Style.font.bodySmall; wrapMode: Text.Wrap
+        }
     }
 
     Flickable {
@@ -342,7 +401,7 @@ FocusScope {
                         delegate: Ui.Button {
                             id: paletteRole
                             required property var modelData
-                            width: (paletteOverview.width - Style.space(15)) / 4
+                            width: Math.floor((paletteOverview.width - Style.space(15)) / 4)
                             height: Style.space(28)
                             foreground: root.ink; accent: root.accent; focusable: true
                             tooltipText: modelData.key + " · " + root.paletteColors[modelData.key] + " · Copy color"
@@ -371,6 +430,7 @@ FocusScope {
                         width: findingsColumn.width; height: Math.max(Style.space(48), categoryTitle.implicitHeight + Style.space(18))
                         text: ""; foreground: root.ink; accent: root.accent; focusable: true
                         selected: root.selectedCategory === modelData.id
+                        Accessible.name: root.categoryName(modelData.id) + ", grade " + (modelData.grade || "not checked") + ", " + root.categoryStatus(modelData)
                         onActiveFocusChanged: if (activeFocus) root.reveal(this)
                         onClicked: {
                             root.selectedCategory = root.selectedCategory === modelData.id ? "" : modelData.id
@@ -405,7 +465,6 @@ FocusScope {
                 }
                 Ui.Button { visible: root.selectedCategory !== ""; text: "Clear category ×"; foreground: root.muted; focusable: true; fontFamily: root.bodyFont; fontSize: Style.font.bodySmall; onClicked: root.selectedCategory = "" }
             }
-            Text { width: parent.width; visible: root.errorText !== ""; text: root.errorText; textFormat: Text.PlainText; color: root.warning; font.family: root.bodyFont; font.pixelSize: Style.font.body; wrapMode: Text.Wrap }
             Text {
                 width: parent.width; visible: root.filteredFindings().length === 0
                 text: !root.report ? (root.refreshing ? "Measuring your theme…" : "Run an audit to begin.") : root.selectedCategory ? "No checks in this group for " + root.categoryName(root.selectedCategory) + "." : root.selectedGroup === "issues" ? "No problems found. Explore Passed to see what checked out." : "No checks in this group."
@@ -426,6 +485,7 @@ FocusScope {
                         x: Style.space(12); y: Style.space(10); width: parent.width - Style.space(24); spacing: Style.space(7)
                         Ui.Button {
                             width: parent.width; text: ""; height: findingHeading.implicitHeight + Style.space(8); foreground: root.ink; accent: root.accent; focusable: true; leftAlign: true
+                            Accessible.name: root.title(findingCard.modelData.ruleId) + ", " + root.severityLabel(findingCard.modelData) + (findingCard.expanded ? ", expanded" : ", collapsed")
                             onActiveFocusChanged: if (activeFocus) root.reveal(findingCard)
                             onClicked: root.toggleDetail(findingCard.modelData.ruleId, false)
                             Row {
@@ -434,7 +494,7 @@ FocusScope {
                                 Text { id: toggle; text: findingCard.expanded ? "−" : "+"; color: root.accent; font.pixelSize: Style.font.body }
                             }
                         }
-                        Text { width: parent.width; text: findingCard.modelData.severity === "failure" ? "Needs fixing" : findingCard.modelData.severity === "caution" ? "Worth checking" : findingCard.modelData.severity === "unassessed" ? "Limitation" : findingCard.modelData.severity === "pass" && !findingCard.modelData.evidence.referenceDefectOwnedByReadability ? "Passed" : "Note"; color: findingCard.modelData.severity === "failure" ? root.failure : findingCard.modelData.severity === "caution" ? root.warning : findingCard.modelData.severity === "pass" ? root.accent : root.muted; font.family: root.bodyFont; font.pixelSize: Style.font.bodySmall }
+                        Text { width: parent.width; text: root.severityLabel(findingCard.modelData); color: findingCard.modelData.severity === "failure" ? root.failure : findingCard.modelData.severity === "caution" ? root.warning : findingCard.modelData.severity === "pass" ? root.accent : root.muted; font.family: root.bodyFont; font.pixelSize: Style.font.bodySmall }
                         Text { width: parent.width; text: root.shortReason(findingCard.modelData); textFormat: Text.PlainText; color: root.muted; font.family: root.bodyFont; font.pixelSize: Style.font.bodySmall; wrapMode: Text.Wrap }
                         Column {
                             visible: findingCard.expanded; width: parent.width; spacing: Style.space(10)

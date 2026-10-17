@@ -40,11 +40,17 @@ enum Commands {
         omarchy_root: Option<PathBuf>,
     },
     Explain {
-        #[arg(value_parser = clap::builder::PossibleValuesParser::new(rules::REGISTRY.iter().map(|r| r.0).chain(std::iter::once("advisory.lua-syntax"))))]
+        #[arg(value_parser = clap::builder::PossibleValuesParser::new(rules::REGISTRY.iter().map(|r| r.0).chain(["advisory.lua-syntax", "advisory.user-shell"])))]
         rule_id: String,
     },
     Rules,
     Version,
+    /// Show which Omarchy runtime behaviors this analyzer can verify.
+    Runtime {
+        /// Omarchy runtime root (defaults to OMARCHY_PATH, then /usr/share/omarchy).
+        #[arg(long)]
+        omarchy_root: Option<PathBuf>,
+    },
     #[command(hide = true)]
     DecodeImage {
         path: PathBuf,
@@ -62,7 +68,44 @@ fn display(text: &str) -> String {
         .collect()
 }
 
+/// Closing the panel terminates the helper; remove its scratch files before exiting.
+fn cleanup_on_termination() {
+    #[cfg(target_os = "linux")]
+    unsafe {
+        let mut set: libc::sigset_t = std::mem::zeroed();
+        libc::sigemptyset(&mut set);
+        for signal in [libc::SIGTERM, libc::SIGINT, libc::SIGHUP] {
+            libc::sigaddset(&mut set, signal);
+        }
+        // Blocked before any other thread exists, so only the waiter receives them.
+        // Child processes start with an empty mask (std resets it on spawn).
+        if libc::pthread_sigmask(libc::SIG_BLOCK, &set, std::ptr::null_mut()) != 0 {
+            return;
+        }
+        std::thread::spawn(move || {
+            let mut signal = 0;
+            if libc::sigwait(&set, &mut signal) == 0 {
+                theme_report::cache::cleanup_staging();
+                libc::_exit(128 + signal);
+            }
+        });
+    }
+}
+fn resolve_omarchy(explicit: Option<PathBuf>) -> PathBuf {
+    explicit.unwrap_or_else(|| {
+        std::env::var_os("OMARCHY_PATH")
+            .filter(|path| !path.is_empty())
+            .map(PathBuf::from)
+            .unwrap_or_else(|| PathBuf::from("/usr/share/omarchy"))
+    })
+}
+
 fn main() {
+    // Behave like other CLI tools when piped into `head`: exit quietly, never panic.
+    #[cfg(unix)]
+    unsafe {
+        libc::signal(libc::SIGPIPE, libc::SIG_DFL);
+    }
     let cli = Cli::parse();
     let json = matches!(
         &cli.command,
@@ -71,7 +114,12 @@ fn main() {
             ..
         }
     );
-    if let Err(e) = run(cli) {
+    if matches!(&cli.command, Commands::Audit { .. }) {
+        cleanup_on_termination();
+    }
+    let result = run(cli);
+    theme_report::cache::cleanup_staging();
+    if let Err(e) = result {
         if json {
             println!(
                 "{}",
@@ -97,6 +145,35 @@ fn run(cli: Cli) -> Result<()> {
             env!("CARGO_PKG_VERSION"),
             rules::RULESET_VERSION
         ),
+        Commands::Runtime { omarchy_root: root } => {
+            let root = resolve_omarchy(root);
+            let files = theme_report::inputs::runtime_files(&root);
+            let contract = theme_report::contract::Contract::evaluate(&files);
+            println!("Omarchy runtime: {}", display(&root.to_string_lossy()));
+            println!(
+                "Status: {}\n",
+                match contract.status {
+                    "reviewed" => "reviewed (exact runtime files)",
+                    "compatible" => "compatible (unrelated runtime changes only)",
+                    "partial" => "partial (some checks paused)",
+                    _ => "unsupported (checks paused)",
+                }
+            );
+            for (label, ok) in [
+                ("Palette loading and core colors", contract.palette),
+                ("Terminal selection fallbacks", contract.selection),
+                ("Shell surfaces and control states", contract.shell),
+            ] {
+                println!("  {label:<36} {}", if ok { "verified" } else { "paused" });
+            }
+            if !contract.unverified.is_empty() {
+                println!("\nUnreviewed changes: {}", contract.unverified.join(", "));
+            }
+            println!("\nExtract hashes:");
+            for (name, digest) in theme_report::contract::extract_hashes(&files) {
+                println!("  {name:<20} {digest}");
+            }
+        }
         Commands::Rules => {
             for (id, cat, budget, mandatory, blocking) in rules::REGISTRY {
                 println!(
@@ -105,15 +182,20 @@ fn run(cli: Cli) -> Result<()> {
                     if blocking { " · blocking" } else { "" }
                 );
             }
-            println!(
-                "{:<34} {:<12}  0 points · advisory",
-                "advisory.lua-syntax", "validity"
-            );
+            for id in ["advisory.lua-syntax", "advisory.user-shell"] {
+                println!("{id:<34} {:<12}  0 points · advisory", "validity");
+            }
         }
         Commands::Explain { rule_id } => {
             if rule_id == "advisory.lua-syntax" {
                 println!(
                     "advisory.lua-syntax\n\nCategory: validity\nBudget: 0 points (advisory)\n\nNo dialect-matched non-executing validator is bundled. Theme Lua is never executed for an audit. Validate separately with a trusted validator matching the installed dialect."
+                );
+                return Ok(());
+            }
+            if rule_id == "advisory.user-shell" {
+                println!(
+                    "advisory.user-shell\n\nCategory: validity\nBudget: 0 points (advisory)\n\nInvalid values in your machine-level ~/.config/omarchy/shell.toml. They are reported but never counted against the theme; checks that depend on them stay unassessed."
                 );
                 return Ok(());
             }
@@ -162,12 +244,7 @@ fn run(cli: Cli) -> Result<()> {
                 theme,
                 current,
                 home,
-                omarchy: omarchy_root.unwrap_or_else(|| {
-                    std::env::var_os("OMARCHY_PATH")
-                        .filter(|path| !path.is_empty())
-                        .map(PathBuf::from)
-                        .unwrap_or_else(|| PathBuf::from("/usr/share/omarchy"))
-                }),
+                omarchy: resolve_omarchy(omarchy_root),
                 cache: cache_dir,
                 profile,
             };
@@ -218,7 +295,7 @@ fn print_report(r: &Report) {
         }
     }
     for reason in &r.cap_reasons {
-        println!("  Grade capped: {reason}");
+        println!("  Grade capped: {}", display(reason));
     }
     println!(
         "\nRead-only · rules {} · profile {}",

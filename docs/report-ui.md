@@ -1,25 +1,45 @@
-# Report exploration
+# Report panel
 
-The panel checks the theme on opening only. A compact upper-right Refresh icon (also R) forces a new check; it is disabled while checking. There is no stale label/expiry, startup audit, input/cache watcher, polling, or queued refresh. Closing cancels the current check. The bar keeps the last checked grade, labeled as such in its tooltip. No bottom action strip is present.
+## Checking
 
-The overview includes a compact theme palette: two ordered swatch banks for authored ANSI normal/bright colors and four resolved role chips (Base, Text, Accent, Urgent). Semantic-only themes show their available named chromatic colors instead of invented ANSI slots. Hover/focus identifies the color; click or keyboard activation copies its hex with brief feedback. This uses report evidence, never direct theme-file reads on the UI thread, and remains above the category rows in the scrollable body so the fixed verdict/Refresh control stay usable on small screens.
+The panel checks the theme when it opens. The upper-right Refresh icon (or R) forces a fresh check and is disabled while one runs. Closing the panel cancels the check. There is no startup audit, polling or queued work.
 
-The overview stays a five-row grade card, not a checklist or JSON dump. All five categories retain their original grading; supported modeled evidence is explicitly labeled. Select a category to inspect its issues, limitations, or passing checks; a healthy category opens **Passed** automatically. Tab counts reflect the selected category. Findings keep their registry order, with failures first in Issues.
+A check that finishes quickly (usually a cache hit) shows no transition. If one takes longer than about a third of a second, the verdict reads "Previous result" and the grade tile shows "—" until it finishes, so a retained result is never mistaken for the current one. Analyzer errors appear under the verdict, next to the retained result.
 
-Passing checks explain what was established and the applicable target. Expand a check for:
+## Badge
 
-- Foreground/background previews and contrast tracks, with the required threshold marked. Indicator/border checks use a boundary symbol rather than pretending they are text pairs.
-- Normal/selected or focused color swatches and an OKLab-separation track.
-- The four resolved foundational color roles.
-- Wallpaper sample grids, reconstructed only from the report's 64 measured colors per image. These are coarse 8×8, center-cropped color samples, not full-resolution wallpaper previews or new filesystem reads.
-- Context, source keys, and a concise explanation. **Technical data** separately reveals the exact evidence JSON.
+The badge shows the last result's letter, `*` when provisional, and `?` when there is none. At startup it reads the last published result from the cache, which is a file read, not an audit. It also picks up results written by the optional theme-switch hook. When `theme.name` no longer matches the result's theme, the badge shows `~` before the letter and the tooltip names the previous theme.
 
-Preview hex colors are rounded display approximations; unrounded measurements decide grades. Track lengths encode contrast or color separation, not category scores, grade confidence, or coverage. Modeled evidence stays explicitly labeled. A wallpaper deficit owned by readability appears in Notes, not as a clean passing measurement; suppression never creates a pass.
+## Overview
 
-Expanded checks and technical toggles survive same-theme refreshes. A different theme resets exploration. Keyboard focus and scrolling remain intact. Previous evidence is labeled during refresh or analyzer errors, never expired by a timer. The native bar badge retains the last checked grade. Panel chrome binds to the live popup palette and shared typography/control tokens, including theme changes while open. The native container owns popup transparency; no second background layer or hardcoded emergency palette covers it. Evidence swatches retain their measured RGB values.
+The header shows the theme name (title-cased), a five-row grade card, and counts of problems, cautions and limitations. When some checks are paused because the installed Omarchy build changed a behavior this analyzer mirrors, a notice under the verdict names what changed. In the Limitations view, the paused checks collapse into a single card that lists them.
+
+The color palette shows two ordered swatch banks for authored ANSI normal/bright colors and four resolved role chips (Base, Text, Accent, Urgent). Semantic-only themes show their named chromatic colors instead of invented ANSI slots. Hover or focus identifies a color; click or Enter copies its hex. This uses report evidence, never direct theme-file reads.
+
+## Exploring findings
+
+Select a category to filter; a healthy category opens **Passed** automatically. Tab counts reflect the selected category. Issues lists failures first, then cautions, in registry order.
+
+Expand a check for:
+
+- foreground/background previews and a contrast track marking the target (indicator and border checks show a boundary symbol rather than text);
+- normal versus selected/focused swatches and an OKLab separation track;
+- the four resolved core colors;
+- wallpaper sample grids rebuilt from the report's 64 measured colors per image (coarse samples, not previews);
+- context, source files and keys, and what to change. **Technical data** reveals the exact evidence JSON.
+
+Preview hex values are rounded; unrounded measurements decide grades. Track lengths encode contrast or separation, not scores. A wallpaper deficit already charged under Text & contrast appears in Notes, not as a pass.
+
+Expanded checks survive same-theme refreshes; a different theme resets exploration. Arrow and Page keys scroll; Escape closes. Category rows and check headers expose accessible names with their grade or state.
+
+## Colors
+
+Panel chrome follows the live popup palette, transparency and typography. Cautions use the theme's own yellow (`yellow`, `color3` or `color11`) when it reaches 3:1 against the popup background. Otherwise they use a blend of urgent toward the text color, so a caution never looks like a pass even when accent equals text color. Evidence swatches keep their measured RGB values. A very low-contrast theme can make the panel itself harder to read; CLI and JSON output stay available.
 
 ## Data contract
 
-Presentation-only v0.4.1 retains schema v2 and ruleset 4. Optional evidence additions include `foreground`, `effectiveBackground`, `normalColor`, `stateColor`, `resolvedColors`, and bounded thumbnail `sampleColors` (64 six-digit RGB strings). They reuse existing calculations/samples, not new scoring passes or image decoding. Full source media is never carried into QML. v0.4.4 adds optional `paletteColors` to `validity.roles` evidence for the overview palette. v0.5.1 restores ruleset-5 scoring and category letters, removing the rejected v0.5.0 guidance conversion. Schema remains v2; open-only audits and the upper-right Refresh control remain unchanged. Analyzer version changes invalidate old caches.
+Schema v2. The panel reads optional evidence fields (`foreground`, `effectiveBackground`, `normalColor`, `stateColor`, `resolvedColors`, `paletteColors`, thumbnail `sampleColors`) and the optional top-level `runtimeContract`. Full source media never reaches QML.
 
-`tests/presentation.rs` compares all grading fields with the frozen v4 baseline and validates visual evidence. The restored golden and rubric regressions verify original category budgets and deductions, including semantic roles, fills, borders and sampled appearance. `tests/qml/report-smoke.qml` exercises the actual panel under Quickshell: passing filters/proof, shared/suppressed honesty, category counts, safe colors and refresh retention/reset. Run that harness inside an isolated native test config containing `plugin/` and the runtime `Ui/` and `Commons/` modules; it cannot run directly under ordinary qmltestrunner because those modules require Quickshell's config namespace. `python3 tests/panel.py` copies the selected native runtime into a repository-local sandbox, runs the panel smoke assertions (including dark/light palette rebinding, popup alpha, and font inheritance), and lints QML. Pass an Omarchy root explicitly to test another runtime. `tests/refresh.py` verifies no startup or file-change checks, per-widget isolation, manual Refresh, reopen checks, ignored busy/closed requests, exact helper invocation counts, and cancellation on close using real Quickshell processes. Native screenshots cover passing text/indicator previews, wallpaper grids and narrow/enlarged-font scrolling.
+## Tests
+
+`python3 tests/panel.py` runs `tests/qml/report-smoke.qml` against a sandboxed copy of the native `Ui/` and `Commons/` modules. It checks palette rebinding, popup alpha, fonts, filters and counts, honesty rules, refresh behavior, the caution hue, paused-check grouping and banner, and header errors, then lints the QML. `python3 tests/refresh.py` drives `Main.qml` with real Quickshell processes. It checks that nothing audits at startup or on file changes, exact helper invocation counts, manual Refresh, cancellation on close, the shared cached result, and the stale badge after a theme switch.

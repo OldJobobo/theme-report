@@ -10,11 +10,27 @@ use std::{
 
 pub const MODEL: &str = "center-crop-160x90-grid8-video5-v2";
 
+/// Decoders must not outlive a cancelled audit (the panel kills the helper on close).
+pub(crate) fn die_with_parent(command: &mut Command) {
+    #[cfg(target_os = "linux")]
+    unsafe {
+        use std::os::unix::process::CommandExt;
+        command.pre_exec(|| {
+            if libc::prctl(libc::PR_SET_PDEATHSIG, libc::SIGKILL) != 0 {
+                return Err(std::io::Error::last_os_error());
+            }
+            Ok(())
+        });
+    }
+    #[cfg(not(target_os = "linux"))]
+    let _ = command;
+}
 pub(crate) fn run(mut command: Command, timeout: Duration, limit: usize) -> Result<Vec<u8>> {
     command
         .stdin(Stdio::null())
         .stdout(Stdio::piped())
         .stderr(Stdio::piped());
+    die_with_parent(&mut command);
     #[cfg(target_os = "linux")]
     unsafe {
         use std::os::unix::process::CommandExt;
@@ -84,6 +100,10 @@ pub(crate) fn run(mut command: Command, timeout: Duration, limit: usize) -> Resu
 }
 
 pub fn backend_identity() -> String {
+    static IDENTITY: std::sync::OnceLock<String> = std::sync::OnceLock::new();
+    IDENTITY.get_or_init(probe_identity).clone()
+}
+fn probe_identity() -> String {
     ["ffprobe", "ffmpeg"]
         .iter()
         .map(|tool| {

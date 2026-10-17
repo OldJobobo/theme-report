@@ -47,6 +47,27 @@ with tempfile.TemporaryDirectory(dir=WORK) as temp:
     assert not (home / ".local/bin/theme-report").exists()
     assert (cache / "current.json").read_text() == "keep"
 
+with tempfile.TemporaryDirectory(dir=WORK) as temp:
+    # An update interrupted after copying leaves old and new hashes in the receipt;
+    # both re-running the install and uninstalling must still work.
+    import hashlib
+    home = pathlib.Path(temp) / "interrupted"
+    install = ["bash", "scripts/install.sh", "--root", str(home), "--binary", str(BINARY)]
+    receipt = home / ".config/omarchy/plugins/oldjobobo.theme-report/.theme-report-owned"
+    panel = home / ".config/omarchy/plugins/oldjobobo.theme-report/Main.qml"
+    def interrupt():
+        newer = panel.read_text() + "\n// newer release\n"
+        digest = hashlib.sha256(newer.encode()).hexdigest()
+        receipt.write_text(receipt.read_text() + digest + "\t.config/omarchy/plugins/oldjobobo.theme-report/Main.qml\n")
+        panel.write_text(newer)
+    command(*install)
+    interrupt()
+    command(*install)
+    assert len(receipt.read_text().splitlines()) == 4, "Final receipt lists only installed hashes"
+    interrupt()
+    command("bash", "scripts/uninstall.sh", "--root", str(home))
+    assert not panel.exists() and not receipt.exists()
+
 schema = json.loads((ROOT / "schema/report-v2.schema.json").read_text())
 jsonschema.Draft202012Validator.check_schema(schema)
 result = command(str(BINARY), "audit", "fixtures/themes/minimal", "--profile", "quattro-shell-2026-v1", "--format", "json", "--cache-dir", str(WORK / "cache"))
@@ -58,6 +79,16 @@ for finding in report["findings"]:
     assert 0 <= finding["pointsLost"] <= finding["assessedBudget"] <= finding["budget"]
 for category in report["categories"]:
     assert 0 <= category["lost"] <= category["assessed"] <= category["expected"] <= category["weight"]
+with tempfile.TemporaryDirectory(dir=WORK) as temp:
+    # Current audits carry the runtime contract; an unknown runtime pauses every check.
+    home = pathlib.Path(temp)
+    theme = home / ".local/state/omarchy/current/theme"
+    theme.mkdir(parents=True)
+    (theme / "colors.toml").write_text((ROOT / "fixtures/themes/minimal/colors.toml").read_text())
+    current = json.loads(subprocess.run([str(BINARY), "audit", "--current", "--format", "json", "--omarchy-root", str(home), "--cache-dir", str(home / "cache")],
+                                        env={"HOME": str(home), "PATH": "/usr/bin:/bin"}, text=True, capture_output=True, check=True).stdout)
+    jsonschema.validate(current, schema)
+    assert current["runtimeContract"]["status"] == "unsupported" and current["grade"] is None
 # Golden stores scoring evidence, not absolute paths, timestamps, or request state.
 golden = {k: report[k] for k in ("rulesetVersion", "score", "grade", "state", "summary", "categories", "findings", "capReasons")}
 expected = json.loads((ROOT / "fixtures/reports/minimal.json").read_text())

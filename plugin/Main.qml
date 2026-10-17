@@ -16,8 +16,16 @@ Panel {
     property string error: ""
     property string output: ""
     property string diagnostic: ""
+    property string currentTheme: ""
     readonly property string home: Quickshell.env("HOME")
+    readonly property string cacheHome: Quickshell.env("XDG_CACHE_HOME") || home + "/.cache"
+    // The active theme is no longer the one the shown result describes.
+    readonly property bool stale: !!report && currentTheme !== "" && report.theme !== currentTheme
     readonly property string status: audit.running ? "Updating" : error ? "Analyzer error" : report ? (report.grade ? report.grade + (report.state === "provisional" ? " · Provisional" : "") : "Not graded") : "Not audited"
+
+    function accepted(data) {
+        return !!data && data.state !== "error" && data.schemaVersion === 2 && data.target === "current" && Array.isArray(data.findings) && Array.isArray(data.categories)
+    }
 
     function request(force) {
         // Only an open panel may audit. Never queue work for a closed panel.
@@ -46,7 +54,7 @@ Panel {
             try {
                 var data = JSON.parse(root.output)
                 if (exitCode !== 0 || data.state === "error") throw new Error(data.error || "Audit process failed")
-                if (data.schemaVersion !== 2 || data.target !== "current" || !Array.isArray(data.findings) || !Array.isArray(data.categories)) throw new Error("Unsupported report format")
+                if (!root.accepted(data)) throw new Error("Unsupported report format")
                 root.report = data
                 root.error = ""
             } catch (e) {
@@ -54,12 +62,35 @@ Panel {
             }
         }
     }
+    // Reading the last published result is not an audit: it restores the badge after a
+    // shell restart and picks up results from the optional theme-set hook.
+    FileView {
+        path: root.cacheHome + "/theme-report/current.json"
+        watchChanges: true
+        printErrors: false
+        onFileChanged: reload()
+        onLoaded: {
+            if (audit.running) return
+            try {
+                var data = JSON.parse(text())
+                if (root.accepted(data)) root.report = data
+            } catch (e) {}
+        }
+    }
+    FileView {
+        path: root.home + "/.local/state/omarchy/current/theme.name"
+        watchChanges: true
+        printErrors: false
+        onFileChanged: reload()
+        onLoaded: root.currentTheme = text().trim()
+    }
     WidgetButton {
         id: badge
         bar: root.bar
         foreground: root.barForeground
-        text: root.report && root.report.grade ? root.report.grade + (root.report.state === "provisional" ? "*" : "") : "?"
-        tooltipText: "Theme Report · " + (audit.running ? "Checking…" : root.report ? "Last check: " + root.status : "Open to check") + (root.report ? "\n" + root.report.theme + "\n" + root.report.summary : "")
+        // "~" marks a result for a previous theme; "*" marks a provisional grade.
+        text: root.report && root.report.grade ? (root.stale ? "~" : "") + root.report.grade + (root.report.state === "provisional" ? "*" : "") : "?"
+        tooltipText: "Theme Report · " + (audit.running ? "Checking…" : !root.report ? "Open to check" : root.stale ? "Theme changed · open to check" : "Last check: " + root.status) + (root.report ? "\n" + (root.stale ? "Previous theme: " : "") + root.report.theme + "\n" + root.report.summary : "")
         onPressed: root.toggle()
     }
     KeyboardPanel {

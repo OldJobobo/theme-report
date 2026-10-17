@@ -212,5 +212,8 @@ fn video_symlinks_cannot_escape_theme_root() {
     let p = t.path().join("outside.mp4");
     movie(&p, false);
     std::os::unix::fs::symlink(&p, c.theme.join("backgrounds/escape.mp4")).unwrap();
-    assert!(Snapshot::capture(&c).is_err());
+    // Never read; reported as an unsampled wallpaper instead of aborting the audit.
+    let s = Snapshot::capture(&c).unwrap();
+    assert!(!s.videos.contains_key("backgrounds/escape.mp4"));
+    assert!(s.unsupported_backgrounds["backgrounds/escape.mp4"].contains("outside the theme"));
 }

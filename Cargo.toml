@@ -1,6 +1,6 @@
 [package]
 name = "theme-report"
-version = "0.5.2"
+version = "0.6.0"
 edition = "2024"
 license = "MIT"
 description = "Read-only Quattro theme health reports"
@@ -12,7 +12,7 @@ serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 toml = "0.9"
 sha2 = "0.10"
-image = { version = "0.25", default-features = false, features = ["png", "jpeg"] }
+image = { version = "0.25", default-features = false, features = ["png", "jpeg", "webp"] }
 libc = "0.2"
 tempfile = "3"
 

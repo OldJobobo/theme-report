@@ -63,6 +63,9 @@ pub struct Report {
     pub assumptions: Vec<String>,
     pub audit_timestamp: u64,
     pub watched_paths: Vec<String>,
+    /// Which mirrored Omarchy runtime behaviors were verified (current audits).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub runtime_contract: Option<Value>,
 }
 pub const CATEGORIES: [(&str, f64); 5] = [
     ("validity", 20.),

@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Verify open-only audits, manual refresh, cancellation and idle widget isolation."""
+"""Verify open-only audits, manual refresh, cancellation, shared cached results and stale badges."""
 import os
 import pathlib
 import shutil
@@ -109,6 +109,7 @@ ShellRoot {
         return condition
     }
     Process { id: mutation; command: [Quickshell.env("HOME") + "/.local/bin/theme-report", "change-inputs"] }
+    Process { id: switchTheme; command: ["sh", "-c", "printf other > $HOME/.local/state/omarchy/current/theme.name"] }
     Timer {
         interval: 700; running: true; repeat: true
         onTriggered: {
@@ -122,12 +123,13 @@ ShellRoot {
                 first.request(true) // Busy refresh must not queue a second process.
                 stage++
             } else if (stage === 2) {
-                if (!verify(first.report && first.status === "A" && !first.error && !second.report, "opening audits only its own widget")) return
+                // The second widget shows the published result without running its own audit.
+                if (!verify(first.report && first.status === "A" && !first.error && second.status === "A", "opening audits only its own widget; others read the shared result")) return
                 retained = first.report
                 mutation.running = true
                 stage++
             } else if (stage === 3) {
-                if (!verify(first.report === retained && first.status === "A" && !second.report, "input and cache writes do not trigger audits")) return
+                if (!verify(first.report === retained && first.status === "A", "input and cache writes do not trigger audits")) return
                 first.request(true)
                 stage++
             } else if (stage === 4) {
@@ -137,7 +139,7 @@ ShellRoot {
                 first.request(true)
                 stage++
             } else if (stage === 5) {
-                if (!verify(first.report === retained && first.status === "A" && !second.report, "closing stops background activity")) return
+                if (!verify(first.report === retained && first.status === "A", "closing stops background activity")) return
                 first.opened = true
                 stage++
             } else if (stage === 6) {
@@ -146,9 +148,14 @@ ShellRoot {
                 first.request(true)
                 cancellation.start()
                 stage++
+            } else if (stage === 7) {
+                if (!verify(!first.opened && first.report === retained && first.status === "A" && !first.error, "closing cancels an in-flight check")) return
+                if (!verify(!first.stale && !second.stale, "matching theme is not stale")) return
+                switchTheme.running = true
+                stage++
             } else {
-                if (!verify(!first.opened && first.report === retained && first.status === "A" && !first.error && !second.report, "closing cancels an in-flight check")) return
-                console.log("PASS: startup idle, open-only audits, explicit Refresh, no watchers or queued work, close cancellation")
+                if (!verify(first.stale && second.stale && first.report === retained, "theme switch marks the badge stale without auditing")) return
+                console.log("PASS: startup idle, open-only audits, explicit Refresh, shared cached result, stale badge, no queued work, close cancellation")
                 Qt.quit()
             }
         }
@@ -168,6 +175,10 @@ ShellRoot {
     output = result.stdout + result.stderr
     assert result.returncode == 0 and "PASS: startup" in output and "FAIL:" not in output, output
     assert (home / "audit-count").read_text().splitlines() == ["audit"] * 4, output
-    assert not any(token in (ROOT / "plugin/Main.qml").read_text() for token in
-                   ["Component.onCompleted", "FileView", "Timer", "queued", "freshnessExpiry"]), "Automatic audits must remain absent"
+    main = (ROOT / "plugin/Main.qml").read_text()
+    assert not any(token in main for token in
+                   ["Component.onCompleted", "Timer", "queued", "freshnessExpiry"]), "Automatic audits must remain absent"
+    # File views only display published results; they never start the analyzer.
+    for block in main.split("FileView {")[1:]:
+        assert "request(" not in block.split("\n    }")[0] and "running = true" not in block.split("\n    }")[0]
     print("PASS: open-only audit regression (real Process, two widgets, exact invocation count, cancellation)")

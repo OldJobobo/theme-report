@@ -86,11 +86,6 @@
           "file": "colors.toml",
           "section": "",
           "key": ""
-        },
-        {
-          "file": "colors.toml",
-          "section": "",
-          "key": ""
         }
       ],
       "remediation": "No change needed."
@@ -140,11 +135,6 @@
           "file": "colors.toml",
           "section": "",
           "key": ""
-        },
-        {
-          "file": "colors.toml",
-          "section": "",
-          "key": ""
         }
       ],
       "remediation": "No change needed."
@@ -167,14 +157,10 @@
       "evidence": {
         "ignoredLines": [],
         "invalidKeys": [],
+        "overriddenOnThisMachine": [],
         "parser": "runtime-line-subset"
       },
       "sources": [
-        {
-          "file": "shell.toml",
-          "section": "",
-          "key": ""
-        },
         {
           "file": "profile.defaults",
           "section": "",
@@ -396,11 +382,6 @@
       },
       "sources": [
         {
-          "file": "shell.toml",
-          "section": "",
-          "key": ""
-        },
-        {
           "file": "profile.defaults",
           "section": "bar",
           "key": "background"
@@ -409,11 +390,6 @@
           "file": "profile.defaults",
           "section": "bar",
           "key": "background-alpha"
-        },
-        {
-          "file": "profile.defaults",
-          "section": "bar",
-          "key": "text"
         },
         {
           "file": "profile.defaults",
@@ -447,11 +423,6 @@
       },
       "sources": [
         {
-          "file": "shell.toml",
-          "section": "",
-          "key": ""
-        },
-        {
           "file": "profile.defaults",
           "section": "popups",
           "key": "background"
@@ -460,11 +431,6 @@
           "file": "profile.defaults",
           "section": "popups",
           "key": "background-alpha"
-        },
-        {
-          "file": "profile.defaults",
-          "section": "popups",
-          "key": "text"
         },
         {
           "file": "profile.defaults",
@@ -498,11 +464,6 @@
       },
       "sources": [
         {
-          "file": "shell.toml",
-          "section": "",
-          "key": ""
-        },
-        {
           "file": "profile.defaults",
           "section": "notifications",
           "key": "background"
@@ -511,11 +472,6 @@
           "file": "profile.defaults",
           "section": "notifications",
           "key": "background-alpha"
-        },
-        {
-          "file": "profile.defaults",
-          "section": "notifications",
-          "key": "text"
         },
         {
           "file": "profile.defaults",
@@ -549,11 +505,6 @@
       },
       "sources": [
         {
-          "file": "shell.toml",
-          "section": "",
-          "key": ""
-        },
-        {
           "file": "profile.defaults",
           "section": "menu",
           "key": "background"
@@ -577,11 +528,6 @@
           "file": "profile.defaults",
           "section": "menu",
           "key": "selected-background-alpha"
-        },
-        {
-          "file": "profile.defaults",
-          "section": "menu",
-          "key": "selected-text"
         }
       ],
       "remediation": "No change needed."
@@ -612,11 +558,6 @@
       },
       "sources": [
         {
-          "file": "shell.toml",
-          "section": "",
-          "key": ""
-        },
-        {
           "file": "profile.defaults",
           "section": "launcher",
           "key": "background"
@@ -642,7 +583,7 @@
           "key": "selected-background-alpha"
         }
       ],
-      "remediation": "Increase this surface's background-alpha or adjust its text/background colors to reach 4.5:1 across the reference background scenarios."
+      "remediation": "No change needed."
     },
     {
       "ruleId": "readability.polkit",
@@ -668,11 +609,6 @@
       },
       "sources": [
         {
-          "file": "shell.toml",
-          "section": "",
-          "key": ""
-        },
-        {
           "file": "profile.defaults",
           "section": "polkit",
           "key": "background"
@@ -681,11 +617,6 @@
           "file": "profile.defaults",
           "section": "polkit",
           "key": "background-alpha"
-        },
-        {
-          "file": "profile.defaults",
-          "section": "polkit",
-          "key": "text"
         },
         {
           "file": "profile.defaults",
@@ -721,11 +652,6 @@
         "sampleModel": "center-crop-160x90-grid8-video5-v2"
       },
       "sources": [
-        {
-          "file": "shell.toml",
-          "section": "",
-          "key": ""
-        },
         {
           "file": "profile.defaults",
           "section": "lock",
@@ -775,11 +701,6 @@
       },
       "sources": [
         {
-          "file": "shell.toml",
-          "section": "",
-          "key": ""
-        },
-        {
           "file": "profile.defaults",
           "section": "tooltip",
           "key": "background"
@@ -795,7 +716,7 @@
           "key": "text"
         }
       ],
-      "remediation": "Increase this surface's background-alpha or adjust its text/background colors to reach 4.5:1 across the reference background scenarios."
+      "remediation": "No change needed."
     },
     {
       "ruleId": "semantic.accent",
@@ -941,11 +862,6 @@
       },
       "sources": [
         {
-          "file": "shell.toml",
-          "section": "",
-          "key": ""
-        },
-        {
           "file": "profile.defaults",
           "section": "controls",
           "key": "normal-color"
@@ -964,14 +880,9 @@
           "file": "profile.defaults",
           "section": "controls",
           "key": "selected-fill-alpha"
-        },
-        {
-          "file": "profile.defaults",
-          "section": "controls",
-          "key": "selected-fill-alpha"
         }
       ],
-      "remediation": "Increase the difference between normal and selected/focused fills if a stronger color cue is needed. Labels, icons, and borders may supply additional cues."
+      "remediation": "No change needed."
     },
     {
       "ruleId": "shell.focus-fill",
@@ -999,11 +910,6 @@
       },
       "sources": [
         {
-          "file": "shell.toml",
-          "section": "",
-          "key": ""
-        },
-        {
           "file": "profile.defaults",
           "section": "controls",
           "key": "normal-color"
@@ -1022,14 +928,9 @@
           "file": "profile.defaults",
           "section": "controls",
           "key": "focus-fill-alpha"
-        },
-        {
-          "file": "profile.defaults",
-          "section": "controls",
-          "key": "focus-fill-alpha"
         }
       ],
-      "remediation": "Increase the difference between normal and selected/focused fills if a stronger color cue is needed. Labels, icons, and borders may supply additional cues."
+      "remediation": "No change needed."
     },
     {
       "ruleId": "shell.popup-border",
@@ -1058,17 +959,12 @@
       },
       "sources": [
         {
-          "file": "shell.toml",
-          "section": "",
-          "key": ""
-        },
-        {
           "file": "profile.defaults",
           "section": "popups",
           "key": "border"
         }
       ],
-      "remediation": "Adjust popup border colors/alpha or background opacity to reach 3:1 across the reference backgrounds."
+      "remediation": "No change needed."
     },
     {
       "ruleId": "wallpaper.lock-model",
@@ -1098,11 +994,6 @@
         "videoSamples": {}
       },
       "sources": [
-        {
-          "file": "shell.toml",
-          "section": "",
-          "key": ""
-        },
         {
           "file": "profile.defaults",
           "section": "lock",
@@ -1154,11 +1045,6 @@
         "videoSamples": {}
       },
       "sources": [
-        {
-          "file": "shell.toml",
-          "section": "",
-          "key": ""
-        },
         {
           "file": "profile.defaults",
           "section": "launcher",

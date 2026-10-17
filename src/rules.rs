@@ -1,5 +1,6 @@
 use crate::{
     color::Color,
+    contract::Contract,
     inputs::{PROFILE, Snapshot},
     model::{Finding, Report, Source},
 };
@@ -80,6 +81,14 @@ fn finding(id: &str, summary: &str) -> Finding {
         )],
         remediation: "Inspect the referenced colors and opacity settings. A limitation is not a theme failure.".into(),
     }
+}
+fn paused(id: &str, contract: &Contract) -> Finding {
+    let mut f = finding(id, "Paused: Omarchy changed how this is rendered");
+    f.evidence = json!({"reason":format!("This Omarchy build changed {} in a way this analyzer version has not reviewed, so the check is paused instead of guessed.", contract.unverified.join(", ")),"runtimeContract":contract.status,"unverified":contract.unverified});
+    f.remediation =
+        "Update theme-report for this Omarchy build. `theme-report runtime` shows what changed."
+            .into();
+    f
 }
 fn boolean(mut f: Finding, ok: bool, evidence: Value) -> Finding {
     f.assessment_status = "assessed".into();
@@ -574,16 +583,11 @@ fn installed_version() -> Option<String> {
 }
 
 pub fn audit(s: &Snapshot) -> Report {
-    let mut r=Report{schema_version:2,analyzer_version:env!("CARGO_PKG_VERSION").into(),ruleset_version:RULESET_VERSION.into(),profile:PROFILE.into(),omarchy_version:if s.config.current { installed_version() } else { None },target:if s.config.current{"current"}else{"materialized-path"}.into(),theme:s.theme.clone(),theme_path:s.config.theme.to_string_lossy().into(),input_fingerprint:s.fingerprint.clone(),state:"not-graded".into(),score:None,grade:None,summary:String::new(),cap_reasons:vec![],categories:vec![],findings:vec![],assumptions:vec!["Resolved-token checks do not reproduce runtime pixels or transient palette state.".into(),"Translucent application-backed surfaces use 17 reference gray backgrounds; grades describe sampled stress resilience, not live window pixels.".into(),"Wallpaper rules are fixed unblurred wallpaper stress models, not lock/launcher runtime accessibility claims.".into(),"Video uses five deterministic temporal samples of 8-bit SDR media, not every frame; decoder identity participates in the fingerprint.".into(),"Experimental semantic/state thresholds are published policy, not universal accessibility standards.".into()],watched_paths:s.paths.values().cloned().chain([s.config.theme.to_string_lossy().into_owned(),s.config.theme.join("backgrounds").to_string_lossy().into_owned()]).collect(),audit_timestamp:SystemTime::now().duration_since(UNIX_EPOCH).unwrap_or_default().as_secs()};
-    if !s.profile_supported {
+    let mut r=Report{schema_version:2,analyzer_version:env!("CARGO_PKG_VERSION").into(),ruleset_version:RULESET_VERSION.into(),profile:PROFILE.into(),omarchy_version:if s.config.current { installed_version() } else { None },target:if s.config.current{"current"}else{"materialized-path"}.into(),theme:s.theme.clone(),theme_path:s.config.theme.to_string_lossy().into(),input_fingerprint:s.fingerprint.clone(),state:"not-graded".into(),score:None,grade:None,summary:String::new(),cap_reasons:vec![],categories:vec![],findings:vec![],assumptions:vec!["Resolved-token checks do not reproduce runtime pixels or transient palette state.".into(),"Translucent application-backed surfaces use 17 reference gray backgrounds; grades describe sampled stress resilience, not live window pixels.".into(),"Wallpaper rules are fixed unblurred wallpaper stress models, not lock/launcher runtime accessibility claims.".into(),"Video uses five deterministic temporal samples of 8-bit SDR media, not every frame; decoder identity participates in the fingerprint.".into(),"Experimental semantic/state thresholds are published policy, not universal accessibility standards.".into()],watched_paths:s.paths.values().cloned().chain([s.config.theme.to_string_lossy().into_owned(),s.config.theme.join("backgrounds").to_string_lossy().into_owned()]).collect(),audit_timestamp:SystemTime::now().duration_since(UNIX_EPOCH).unwrap_or_default().as_secs(),runtime_contract:s.config.current.then(|| s.contract.to_json())};
+    if !s.contract.palette {
         r.findings = REGISTRY
             .iter()
-            .map(|(id, _, _, _, _)| {
-                let mut f = finding(id, "Unsupported Quattro contract");
-                f.evidence = json!({"reason":"The installed Quattro color/style contract is not recognized. No runtime colors are guessed."});
-                f.remediation = "Use an analyzer release supporting this installed Omarchy contract.".into();
-                f
-            })
+            .map(|(id, _, _, _, _)| paused(id, &s.contract))
             .collect();
         r.score();
         return r;
@@ -610,8 +614,24 @@ pub fn audit(s: &Snapshot) -> Report {
         json!({"missingOrUnsupported":missing,"resolvedColors":(["background","foreground","accent","urgent"].iter().filter_map(|key|p.get(*key).map(|c|((*key).to_string(),c.hex()))).collect::<BTreeMap<_,_>>()),"paletteColors":p.iter().map(|(key,color)|(key.clone(),color.hex())).collect::<BTreeMap<_,_>>()}),
     ));
     let mut shell = Shell::parse(s.text("shell.toml").unwrap_or(""));
-    shell.merge(Shell::parse(s.text("user.shell.toml").unwrap_or("")));
-    r.findings.push(boolean(finding("validity.shell","Known shell domains and generated tokens are valid"),shell.invalid.is_empty(),json!({"invalidKeys":shell.invalid,"ignoredLines":shell.ignored,"parser":"runtime-line-subset"})));
+    let user = Shell::parse(s.text("user.shell.toml").unwrap_or(""));
+    // The theme owns its invalid values; a machine-level override is reported separately.
+    let theme_invalid = std::mem::take(&mut shell.invalid);
+    let overridden: Vec<_> = theme_invalid
+        .iter()
+        .filter(|key| user.values.contains_key(*key))
+        .cloned()
+        .collect();
+    shell.merge(Shell {
+        values: user.values.clone(),
+        ignored: user
+            .ignored
+            .iter()
+            .map(|line| format!("user.shell.toml {line}"))
+            .collect(),
+        invalid: vec![],
+    });
+    r.findings.push(boolean(finding("validity.shell","Known shell domains and generated tokens are valid"),theme_invalid.is_empty(),json!({"invalidKeys":theme_invalid,"overriddenOnThisMachine":overridden,"ignoredLines":shell.ignored,"parser":"runtime-line-subset"})));
     let images: Vec<_> = s
         .files
         .iter()
@@ -740,6 +760,9 @@ pub fn audit(s: &Snapshot) -> Report {
     {
         assets.sources.push(source(name, "", ""));
     }
+    if !s.ignored_backgrounds.is_empty() {
+        assets.evidence["ignored"] = json!(s.ignored_backgrounds);
+    }
     r.findings.push(assets);
     if let (Some(&bg), Some(&fg)) = (p.get("background"), p.get("foreground")) {
         r.findings.push(contrast(
@@ -834,7 +857,9 @@ pub fn audit(s: &Snapshot) -> Report {
                     3.,
                     json!({"contrast":worst.0,"required":4.5,"effectiveBackground":worst.2.hex(),"foreground":worst.3.hex(),"backgroundModel":STRESS_MODEL,"backgroundSamples":17,"scope":"text contrast over reference dark-to-light application backgrounds, not captured live windows"}),
                 );
-                f.remediation="Increase this surface's background-alpha or adjust its text/background colors to reach 4.5:1 across the reference background scenarios.".into();
+                if f.points_lost > 0. {
+                    f.remediation="Increase this surface's background-alpha or adjust its text/background colors to reach 4.5:1 across the reference background scenarios.".into();
+                }
             }
             if let Some(mut surface) = opaque_surface(&shell, &p, section) {
                 let key = if selected { "selected-text" } else { "text" };
@@ -944,7 +969,9 @@ pub fn audit(s: &Snapshot) -> Report {
                     0.,
                     json!({"oklabDistance":d,"required":0.02,"normalColor":worst.1.hex(),"stateColor":worst.2.hex(),"backgroundModel":if surfaces.len()>1 {STRESS_MODEL} else {"opaque-resolved-surface"},"backgroundSamples":surfaces.len(),"scope":"sampled shared fill visibility only; weak fill is a caution, not proof that redundant labels/icons/borders fail"}),
                 );
-                f.remediation="Increase the difference between normal and selected/focused fills if a stronger color cue is needed. Labels, icons, and borders may supply additional cues.".into();
+                if f.points_lost > 0. {
+                    f.remediation="Increase the difference between normal and selected/focused fills if a stronger color cue is needed. Labels, icons, and borders may supply additional cues.".into();
+                }
                 f.sources.push(source(
                     "shell.toml",
                     "controls",
@@ -1002,7 +1029,9 @@ pub fn audit(s: &Snapshot) -> Report {
             border
                 .sources
                 .push(source("shell.toml", "popups", "border"));
-            border.remediation="Adjust popup border colors/alpha or background opacity to reach 3:1 across the reference backgrounds.".into();
+            if border.points_lost > 0. {
+                border.remediation="Adjust popup border colors/alpha or background opacity to reach 3:1 across the reference backgrounds.".into();
+            }
         }
         r.findings.push(border);
         for (id, section, selected) in [
@@ -1092,7 +1121,22 @@ pub fn audit(s: &Snapshot) -> Report {
         f.remediation = "Validate with a trusted non-executing validator matching the installed Lua dialect; never run theme code for an audit.".into();
         r.findings.push(f);
     }
-    let user = Shell::parse(s.text("user.shell.toml").unwrap_or(""));
+    if !user.invalid.is_empty() {
+        let mut f = finding(
+            "validity.shell",
+            "Your shell.toml override has invalid values",
+        );
+        f.rule_id = "advisory.user-shell".into();
+        f.scored = false;
+        f.budget = 0.;
+        f.mandatory = false;
+        f.blocking = false;
+        f.severity = "advisory".into();
+        f.evidence = json!({"invalidKeys":user.invalid,"reason":"These values in ~/.config/omarchy/shell.toml are outside their valid range. They are not counted against the theme, but checks that depend on them cannot be measured."});
+        f.sources = vec![source("user.shell.toml", "", "")];
+        f.remediation = "Fix or remove these keys in ~/.config/omarchy/shell.toml.".into();
+        r.findings.push(f);
+    }
     for f in &mut r.findings {
         if f.rule_id == "validity.palette" || f.rule_id == "validity.roles" {
             f.sources.push(source("colors.toml", "", ""));
@@ -1127,6 +1171,19 @@ pub fn audit(s: &Snapshot) -> Report {
         }
         if f.rule_id == "validity.shell" && s.files.contains_key("user.shell.toml") {
             f.sources.push(source("user.shell.toml", "", ""));
+        }
+        // No file-level pointer at a shell.toml the theme does not have; no repeated sources.
+        let theme_shell = s.files.contains_key("shell.toml");
+        f.sources.retain(|src| {
+            theme_shell
+                || !(src.file == "shell.toml" && src.section.is_empty() && src.key.is_empty())
+        });
+        let mut seen = std::collections::BTreeSet::new();
+        f.sources
+            .retain(|src| seen.insert((src.file.clone(), src.section.clone(), src.key.clone())));
+        // Checks mirroring runtime behavior this analyzer has not verified are paused.
+        if f.scored && !s.contract.allows(&f.rule_id) {
+            *f = paused(&f.rule_id, &s.contract);
         }
     }
     r.score();

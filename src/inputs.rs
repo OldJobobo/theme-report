@@ -1,3 +1,4 @@
+use crate::contract::Contract;
 use anyhow::{Context, Result, bail};
 use sha2::{Digest, Sha256};
 use std::{
@@ -16,6 +17,14 @@ pub const IMAGE_DISK_LIMIT: u64 = 256 * 1024 * 1024;
 pub const TOTAL_LIMIT: usize = 128 * 1024 * 1024;
 pub const VIDEO_LIMIT: u64 = 256 * 1024 * 1024;
 pub const VIDEO_TOTAL_LIMIT: u64 = 1024 * 1024 * 1024;
+/// Wallpapers sampled per audit; extra files become a visible limitation.
+pub const BACKGROUND_LIMIT: usize = 32;
+const IMAGE_EXTENSIONS: [&str; 4] = ["png", "jpg", "jpeg", "webp"];
+const VIDEO_EXTENSIONS: [&str; 6] = ["mp4", "mov", "m4v", "webm", "mkv", "avi"];
+// Recognized wallpaper formats that cannot be sampled yet; they stay limitations.
+const OTHER_MEDIA_EXTENSIONS: [&str; 9] = [
+    "gif", "bmp", "avif", "heic", "heif", "tif", "tiff", "jxl", "svg",
+];
 #[derive(Clone)]
 pub struct MediaInput {
     pub file: Arc<tempfile::NamedTempFile>,
@@ -37,59 +46,22 @@ pub struct Snapshot {
     pub files: BTreeMap<String, Vec<u8>>,
     pub paths: BTreeMap<String, String>,
     pub unsupported_backgrounds: BTreeMap<String, String>,
+    /// Entries in backgrounds/ that are not wallpaper media (directories, notes).
+    pub ignored_backgrounds: Vec<String>,
     pub videos: BTreeMap<String, MediaInput>,
     pub large_images: BTreeMap<String, MediaInput>,
     capture_started: Instant,
     pub fingerprint: String,
+    /// Cheap metadata manifest taken before any content was read.
+    pub manifest: String,
     pub theme: String,
-    pub profile_supported: bool,
+    pub contract: Contract,
     pub config: Config,
 }
 pub fn hash(data: &[u8]) -> String {
     format!("{:x}", Sha256::digest(data))
 }
 
-// Exact reviewed contracts, kept as complete tuples to reject mixed generations.
-// Qt 6.12 variants qualify Color references or rename the singleton to ShellColor.
-// r6866 removes the image-picker scrim and adds bar notch geometry; neither
-// changes the palette/state defaults or surfaces assessed by this profile.
-const ORIGINAL_TEMPLATE: &str = "bdc8e76a5a9a700adaca0d2fa44a2a340584892fd507e3fcbd4f9a4843765242";
-const PALETTE_FALLBACKS: &str = "a429ed1b18114ff3e784fc4479c6b829e9effb64c0f9d22d3b15eda4c62d86b5";
-const RUNTIME_CONTRACTS: &[(&str, &str, &str, &str)] = &[
-    (
-        "b7b0f7df6e820851a50ddc641e1a87e33b8a6adbc14149fddf2d1e4f879dd163",
-        "3d09947d917633b167f08d250696302e126e608c47991c604dca969d692f6221",
-        ORIGINAL_TEMPLATE,
-        PALETTE_FALLBACKS,
-    ),
-    (
-        "cc9b62e2eaf8c307aa02206d9320c3d0ca349cf8feed452a6eddf387adaa5320",
-        "f5901092617ae62645597199270afd4dfb0644d596bdfff16e1834fca6ad7243",
-        ORIGINAL_TEMPLATE,
-        PALETTE_FALLBACKS,
-    ),
-    (
-        "b7b0f7df6e820851a50ddc641e1a87e33b8a6adbc14149fddf2d1e4f879dd163",
-        "0b2aec0b87ee0c895cedd93c4357b46c1009b7302ddc75aa6d99ad5b259e1b02",
-        ORIGINAL_TEMPLATE,
-        PALETTE_FALLBACKS,
-    ),
-    (
-        "b7b0f7df6e820851a50ddc641e1a87e33b8a6adbc14149fddf2d1e4f879dd163",
-        "d0a7ab5222931313b4b3831d3cc3a1d5c6c6ad9e8fcbb41b96e8af0402c05a92",
-        ORIGINAL_TEMPLATE,
-        PALETTE_FALLBACKS,
-    ),
-    (
-        "08af401286831759b63279cf6d6732d666256c751864a03bd5594ea29a29f0e5",
-        "f84c801f2457a93130c99cb284de2615baafea6bd15de47cf190f0b11e5598a0",
-        "38461c50c432b7332a3f59673536e8a784745bf678c58dfa3dcae7e4a91196b3",
-        PALETTE_FALLBACKS,
-    ),
-];
-fn supported_contract(color: &str, style: &str, template: &str, palette: &str) -> bool {
-    RUNTIME_CONTRACTS.contains(&(color, style, template, palette))
-}
 pub(crate) fn bounded(path: &Path, limit: u64) -> Result<Vec<u8>> {
     // Nonblocking/no-follow open prevents a file-to-FIFO/symlink swap from hanging capture.
     let mut options = fs::OpenOptions::new();
@@ -112,104 +84,310 @@ pub(crate) fn bounded(path: &Path, limit: u64) -> Result<Vec<u8>> {
     }
     Ok(v)
 }
-impl Snapshot {
-    pub fn capture(config: &Config) -> Result<Self> {
-        let root = config
-            .theme
-            .canonicalize()
-            .context("Theme directory is unavailable")?;
-        let mut s = Self {
-            files: BTreeMap::new(),
-            paths: BTreeMap::new(),
-            unsupported_backgrounds: BTreeMap::new(),
-            videos: BTreeMap::new(),
-            large_images: BTreeMap::new(),
-            capture_started: Instant::now(),
-            fingerprint: String::new(),
-            theme: root
-                .file_name()
-                .unwrap_or_default()
-                .to_string_lossy()
-                .into(),
-            profile_supported: false,
-            config: config.clone(),
-        };
-        for name in ["colors.toml", "shell.toml", "hyprland.lua"] {
-            s.add(name, &root.join(name), TEXT_LIMIT, Some(&root))?;
-        }
-        if config.current {
-            let base = config.home.join(".local/state/omarchy/current");
-            s.add("theme.name", &base.join("theme.name"), TEXT_LIMIT, None)?;
-            if let Some(v) = s.files.get("theme.name") {
-                s.theme = String::from_utf8_lossy(v).trim().into();
-            }
-            s.add(
-                "user.shell.toml",
-                &config.home.join(".config/omarchy/shell.toml"),
-                TEXT_LIMIT,
-                None,
-            )?;
-            // The explicit current background is an authorized input, not a directory traversal root.
-            s.add_background("current.background", &base.join("background"), None)?;
-        }
-        let backgrounds = root.join("backgrounds");
-        if backgrounds.exists() {
-            let b = backgrounds.canonicalize()?;
-            if !b.starts_with(&root) {
-                bail!("Background directory escapes theme root")
-            }
-            let mut entries = fs::read_dir(&b)?.collect::<std::io::Result<Vec<_>>>()?;
+
+enum Kind {
+    Text,
+    Background,
+}
+struct Input {
+    role: String,
+    path: PathBuf,
+    kind: Kind,
+    root: Option<PathBuf>,
+}
+/// Every input an audit reads, discovered without reading file contents.
+struct Plan {
+    root: PathBuf,
+    inputs: Vec<Input>,
+    ignored: Vec<String>,
+    over_limit: Vec<String>,
+    escaped_backgrounds: bool,
+}
+
+fn extension(path: &Path) -> String {
+    path.extension()
+        .and_then(|e| e.to_str())
+        .unwrap_or("")
+        .to_ascii_lowercase()
+}
+fn sniff(path: &Path) -> Vec<u8> {
+    let mut options = fs::OpenOptions::new();
+    options.read(true);
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::OpenOptionsExt;
+        options.custom_flags(libc::O_NONBLOCK);
+    }
+    let mut header = vec![0u8; 16];
+    let count = options
+        .open(path)
+        .and_then(|mut f| f.read(&mut header))
+        .unwrap_or(0);
+    header.truncate(count);
+    header
+}
+fn video_magic(header: &[u8]) -> Option<&'static str> {
+    if header.starts_with(&[0x1a, 0x45, 0xdf, 0xa3]) {
+        Some("matroska")
+    } else if header.len() >= 8 && &header[4..8] == b"ftyp" {
+        Some("mov")
+    } else {
+        None
+    }
+}
+/// Wallpaper media by extension, or by content for extension-less files.
+fn is_media(path: &Path) -> bool {
+    let ext = extension(path);
+    if IMAGE_EXTENSIONS.contains(&ext.as_str())
+        || VIDEO_EXTENSIONS.contains(&ext.as_str())
+        || OTHER_MEDIA_EXTENSIONS.contains(&ext.as_str())
+    {
+        return true;
+    }
+    let header = sniff(path);
+    image::guess_format(&header).is_ok() || video_magic(&header).is_some()
+}
+
+fn plan(config: &Config) -> Result<Plan> {
+    let root = config
+        .theme
+        .canonicalize()
+        .context("Theme directory is unavailable")?;
+    let mut plan = Plan {
+        inputs: vec![],
+        ignored: vec![],
+        over_limit: vec![],
+        escaped_backgrounds: false,
+        root: root.clone(),
+    };
+    let mut push = |role: &str, path: PathBuf, kind: Kind, root: Option<&Path>| {
+        plan.inputs.push(Input {
+            role: role.into(),
+            path,
+            kind,
+            root: root.map(Path::to_path_buf),
+        })
+    };
+    for name in ["colors.toml", "shell.toml", "hyprland.lua"] {
+        push(name, root.join(name), Kind::Text, Some(&root));
+    }
+    if config.current {
+        let base = config.home.join(".local/state/omarchy/current");
+        push("theme.name", base.join("theme.name"), Kind::Text, None);
+        push(
+            "user.shell.toml",
+            config.home.join(".config/omarchy/shell.toml"),
+            Kind::Text,
+            None,
+        );
+        // The explicit current background is an authorized input, not a directory traversal root.
+        push(
+            "current.background",
+            base.join("background"),
+            Kind::Background,
+            None,
+        );
+    }
+    let backgrounds = root.join("backgrounds");
+    if backgrounds.exists() {
+        if !backgrounds.canonicalize()?.starts_with(&root) {
+            plan.escaped_backgrounds = true;
+        } else {
+            let mut entries = fs::read_dir(&backgrounds)?.collect::<std::io::Result<Vec<_>>>()?;
             entries.sort_by_key(|e| e.file_name());
-            if entries.len() > 16 {
-                bail!("Background set exceeds 16 entries")
-            }
+            let mut media = Vec::new();
             for entry in entries {
                 let name = entry.file_name().to_string_lossy().into_owned();
                 if name.starts_with('.') {
                     continue;
                 }
-                s.add_background(&format!("backgrounds/{name}"), &entry.path(), Some(&root))?;
+                let path = entry.path();
+                match fs::metadata(&path) {
+                    // Omarchy themes ship backgrounds/intros/ and similar folders; never recurse.
+                    Ok(m) if m.is_dir() => plan.ignored.push(format!("backgrounds/{name}/")),
+                    Ok(m) if !m.is_file() => plan.ignored.push(format!("backgrounds/{name}")),
+                    Ok(_) if !is_media(&path) => plan.ignored.push(format!("backgrounds/{name}")),
+                    // A broken link stays a (missing) background role.
+                    Ok(_) => media.push((name, path)),
+                    Err(e) if e.kind() == std::io::ErrorKind::NotFound => media.push((name, path)),
+                    Err(e) => return Err(e.into()),
+                }
+            }
+            for (i, (name, path)) in media.into_iter().enumerate() {
+                if i >= BACKGROUND_LIMIT {
+                    plan.over_limit.push(format!("backgrounds/{name}"));
+                } else {
+                    plan.inputs.push(Input {
+                        role: format!("backgrounds/{name}"),
+                        path,
+                        kind: Kind::Background,
+                        root: Some(root.clone()),
+                    });
+                }
             }
         }
-        if config.current {
-            let color_relative = if config.omarchy.join("shell/Commons/ShellColor.qml").exists() {
-                "shell/Commons/ShellColor.qml"
-            } else {
-                "shell/Commons/Color.qml"
-            };
-            for (role, relative) in [
-                ("runtime.color", color_relative),
-                ("runtime.style", "shell/Commons/Style.qml"),
-                ("runtime.template", "default/themed/shell.toml.tpl"),
-                ("runtime.geometry", "shell/Commons/BorderGeometry.js"),
-                ("runtime.palette-fallbacks", "bin/omarchy-theme-color"),
-            ] {
-                s.add(role, &config.omarchy.join(relative), TEXT_LIMIT, None)?;
+    }
+    if config.current {
+        for (role, path) in runtime_inputs(&config.omarchy) {
+            plan.inputs.push(Input {
+                role: role.into(),
+                path,
+                kind: Kind::Text,
+                root: None,
+            });
+        }
+    }
+    Ok(plan)
+}
+fn runtime_inputs(omarchy: &Path) -> [(&'static str, PathBuf); 5] {
+    let color = if omarchy.join("shell/Commons/ShellColor.qml").exists() {
+        "shell/Commons/ShellColor.qml"
+    } else {
+        "shell/Commons/Color.qml"
+    };
+    [
+        ("runtime.color", omarchy.join(color)),
+        ("runtime.style", omarchy.join("shell/Commons/Style.qml")),
+        (
+            "runtime.template",
+            omarchy.join("default/themed/shell.toml.tpl"),
+        ),
+        (
+            "runtime.geometry",
+            omarchy.join("shell/Commons/BorderGeometry.js"),
+        ),
+        (
+            "runtime.palette-fallbacks",
+            omarchy.join("bin/omarchy-theme-color"),
+        ),
+    ]
+}
+/// The runtime contract files of an Omarchy root, by snapshot role (missing files omitted).
+pub fn runtime_files(omarchy: &Path) -> BTreeMap<String, Vec<u8>> {
+    runtime_inputs(omarchy)
+        .into_iter()
+        .filter_map(|(role, path)| {
+            bounded(&path.canonicalize().ok()?, TEXT_LIMIT)
+                .ok()
+                .map(|bytes| (role.to_string(), bytes))
+        })
+        .collect()
+}
+
+fn manifest_of(plan: &Plan) -> Result<String> {
+    use std::os::unix::fs::MetadataExt;
+    let mut digest = Sha256::new();
+    digest.update(b"manifest-v1\0");
+    digest.update(env!("CARGO_PKG_VERSION"));
+    digest.update(plan.root.as_os_str().as_encoded_bytes());
+    let stat = |digest: &mut Sha256, m: &fs::Metadata| {
+        for n in [
+            m.len() as i64,
+            m.mtime(),
+            m.mtime_nsec(),
+            m.ctime(),
+            m.ctime_nsec(),
+            m.ino() as i64,
+            m.dev() as i64,
+        ] {
+            digest.update(n.to_be_bytes());
+        }
+    };
+    for input in &plan.inputs {
+        digest.update(b"\0role\0");
+        digest.update(input.role.as_bytes());
+        // The link itself (retargeting) and what it resolves to.
+        if let Ok(link) = fs::symlink_metadata(&input.path) {
+            stat(&mut digest, &link);
+        }
+        match fs::metadata(&input.path) {
+            Ok(m) => {
+                stat(&mut digest, &m);
+                if let Ok(target) = input.path.canonicalize() {
+                    digest.update(target.as_os_str().as_encoded_bytes());
+                }
             }
-            let color = s
-                .files
-                .get("runtime.color")
-                .map(|v| hash(v))
-                .unwrap_or_default();
-            let style = s
-                .files
-                .get("runtime.style")
-                .map(|v| hash(v))
-                .unwrap_or_default();
-            let tpl = s
-                .files
-                .get("runtime.template")
-                .map(|v| hash(v))
-                .unwrap_or_default();
-            let palette_contract = s
-                .files
-                .get("runtime.palette-fallbacks")
-                .map(|v| hash(v))
-                .unwrap_or_default();
-            s.profile_supported = supported_contract(&color, &style, &tpl, &palette_contract);
+            Err(e) if e.kind() == std::io::ErrorKind::NotFound => digest.update(b"missing"),
+            Err(e) => return Err(e.into()),
+        }
+    }
+    for name in plan.ignored.iter().chain(&plan.over_limit) {
+        digest.update(b"\0listed\0");
+        digest.update(name.as_bytes());
+    }
+    digest.update([u8::from(plan.escaped_backgrounds)]);
+    // Decoder upgrades change samples; their executables stand in for version probes.
+    for tool in [crate::wallpaper::thumbnail_tool(), "ffmpeg", "ffprobe"] {
+        digest.update(tool.as_bytes());
+        if let Some(path) = std::env::var_os("PATH").and_then(|p| {
+            std::env::split_paths(&p)
+                .map(|dir| dir.join(tool))
+                .find(|path| path.is_file())
+        }) && let Ok(m) = fs::metadata(&path)
+        {
+            stat(&mut digest, &m);
+        }
+    }
+    Ok(format!("{:x}", digest.finalize()))
+}
+/// Metadata-only manifest of the current inputs: cheap enough to compute repeatedly.
+pub fn manifest(config: &Config) -> Result<String> {
+    manifest_of(&plan(config)?)
+}
+
+impl Snapshot {
+    pub fn capture(config: &Config) -> Result<Self> {
+        let plan = plan(config)?;
+        let manifest = manifest_of(&plan)?;
+        let mut s = Self {
+            files: BTreeMap::new(),
+            paths: BTreeMap::new(),
+            unsupported_backgrounds: BTreeMap::new(),
+            ignored_backgrounds: plan.ignored.clone(),
+            videos: BTreeMap::new(),
+            large_images: BTreeMap::new(),
+            capture_started: Instant::now(),
+            fingerprint: String::new(),
+            manifest,
+            theme: plan
+                .root
+                .file_name()
+                .unwrap_or_default()
+                .to_string_lossy()
+                .into(),
+            contract: Contract::profile(),
+            config: config.clone(),
+        };
+        for input in &plan.inputs {
+            match input.kind {
+                Kind::Text => s.add(&input.role, &input.path, TEXT_LIMIT, input.root.as_deref())?,
+                Kind::Background => {
+                    s.add_background(&input.role, &input.path, input.root.as_deref())?
+                }
+            }
+        }
+        if let Some(v) = s.files.get("theme.name") {
+            s.theme = String::from_utf8_lossy(v).trim().into();
+        }
+        if plan.escaped_backgrounds {
+            s.unsupported_backgrounds.insert(
+                "backgrounds/".into(),
+                "backgrounds directory resolves outside the theme; not read".into(),
+            );
+        }
+        for role in &plan.over_limit {
+            s.unsupported_backgrounds.insert(
+                role.clone(),
+                format!("not sampled: more than {BACKGROUND_LIMIT} wallpapers in the set"),
+            );
+        }
+        s.contract = if config.current {
+            Contract::evaluate(&s.files)
+        } else if config.profile.as_deref() == Some(PROFILE) {
+            Contract::profile()
         } else {
-            s.profile_supported = config.profile.as_deref() == Some(PROFILE);
-        }
+            Contract::evaluate(&BTreeMap::new())
+        };
         if s.files.values().map(Vec::len).sum::<usize>() > TOTAL_LIMIT {
             bail!("Snapshot exceeds 128 MiB")
         }
@@ -253,8 +431,12 @@ impl Snapshot {
             digest.update((descriptor.len() as u64).to_be_bytes());
             digest.update(descriptor.as_bytes());
         }
+        for name in &s.ignored_backgrounds {
+            digest.update(b"\0ignored-background\0");
+            digest.update(name.as_bytes());
+        }
         // Missing inputs have explicit stable markers, even when a file is absent.
-        for (role, path) in &s.paths {
+        for role in s.paths.keys() {
             if !s.files.contains_key(role)
                 && !s.unsupported_backgrounds.contains_key(role)
                 && !s.videos.contains_key(role)
@@ -263,7 +445,6 @@ impl Snapshot {
                 digest.update(role.as_bytes());
                 digest.update(b"\0missing\0");
             }
-            let _ = path;
         }
         s.fingerprint = format!("{:x}", digest.finalize());
         Ok(s)
@@ -276,8 +457,13 @@ impl Snapshot {
             Err(e) if e.kind() == std::io::ErrorKind::NotFound => return Ok(()),
             Err(e) => return Err(e.into()),
         };
+        // Never read outside the theme; an escaping link is a visible limitation, not an abort.
         if root.is_some_and(|r| !resolved.starts_with(r)) {
-            bail!("Input symlink escapes theme root: {}", path.display())
+            self.unsupported_backgrounds.insert(
+                role.into(),
+                "symlink resolves outside the theme; not read".into(),
+            );
+            return Ok(());
         }
         let mut options = fs::OpenOptions::new();
         options.read(true);
@@ -289,20 +475,18 @@ impl Snapshot {
         let mut file = options.open(&resolved)?;
         let metadata = file.metadata()?;
         if !metadata.is_file() {
-            bail!("Not a regular file: {}", path.display())
+            self.unsupported_backgrounds
+                .insert(role.into(), "not a regular file".into());
+            return Ok(());
         }
-        let extension = resolved
-            .extension()
-            .and_then(|e| e.to_str())
-            .unwrap_or("")
-            .to_ascii_lowercase();
+        let extension = extension(&resolved);
         let mut header = [0u8; 16];
         let count = file.read(&mut header)?;
         let format = image::guess_format(&header[..count]).ok();
-        let is_image = matches!(extension.as_str(), "png" | "jpg" | "jpeg")
+        let is_image = IMAGE_EXTENSIONS.contains(&extension.as_str())
             || matches!(
                 format,
-                Some(image::ImageFormat::Png | image::ImageFormat::Jpeg)
+                Some(image::ImageFormat::Png | image::ImageFormat::Jpeg | image::ImageFormat::WebP)
             );
         if is_image && metadata.len() <= IMAGE_LIMIT {
             self.add(role, &resolved, IMAGE_LIMIT, root)?;
@@ -312,9 +496,7 @@ impl Snapshot {
             "mp4" | "mov" | "m4v" => Some("mov"),
             "webm" | "mkv" => Some("matroska"),
             "avi" => Some("avi"),
-            _ if header[..count].starts_with(&[0x1a, 0x45, 0xdf, 0xa3]) => Some("matroska"),
-            _ if count >= 8 && &header[4..8] == b"ftyp" => Some("mov"),
-            _ => None,
+            _ => video_magic(&header[..count]),
         };
         let disk_format = if is_image {
             Some("image")
@@ -348,8 +530,8 @@ impl Snapshot {
                 );
                 return Ok(());
             }
-            fs::create_dir_all(&self.config.cache)?;
-            let mut snapshot = tempfile::NamedTempFile::new_in(&self.config.cache)?;
+            let mut snapshot =
+                tempfile::NamedTempFile::new_in(crate::cache::staging(&self.config.cache)?)?;
             file.rewind()?;
             let mut hash = Sha256::new();
             let mut buffer = [0u8; 65536];
@@ -449,44 +631,8 @@ impl Snapshot {
             .get(role)
             .and_then(|b| std::str::from_utf8(b).ok())
     }
+    /// Inputs are unchanged since this snapshot began reading them.
     pub fn stable(&self) -> Result<bool> {
-        let next = Self::capture(&self.config)?;
-        Ok(next.fingerprint == self.fingerprint && next.paths == self.paths)
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-    #[test]
-    fn reviewed_runtime_variants_do_not_disable_verification() {
-        for &(color, style, template, palette) in RUNTIME_CONTRACTS {
-            assert!(supported_contract(color, style, template, palette));
-            assert!(!supported_contract("unknown", style, template, palette));
-            assert!(!supported_contract(color, "unknown", template, palette));
-            assert!(!supported_contract(color, style, "unknown", palette));
-            assert!(!supported_contract(color, style, template, "unknown"));
-        }
-        assert!(!supported_contract(
-            RUNTIME_CONTRACTS[0].0,
-            RUNTIME_CONTRACTS[1].1,
-            ORIGINAL_TEMPLATE,
-            PALETTE_FALLBACKS
-        ));
-    }
-
-    #[test]
-    fn r6866_contract_requires_the_reviewed_combination() {
-        let color = "08af401286831759b63279cf6d6732d666256c751864a03bd5594ea29a29f0e5";
-        let style = "f84c801f2457a93130c99cb284de2615baafea6bd15de47cf190f0b11e5598a0";
-        let template = "38461c50c432b7332a3f59673536e8a784745bf678c58dfa3dcae7e4a91196b3";
-        let palette = "a429ed1b18114ff3e784fc4479c6b829e9effb64c0f9d22d3b15eda4c62d86b5";
-        assert!(supported_contract(color, style, template, palette));
-        for &(old_color, old_style, old_template, _) in &RUNTIME_CONTRACTS[..4] {
-            assert!(!supported_contract(old_color, style, template, palette));
-            assert!(!supported_contract(color, old_style, template, palette));
-            assert!(!supported_contract(color, style, old_template, palette));
-            assert!(!supported_contract(old_color, old_style, template, palette));
-        }
+        Ok(manifest(&self.config)? == self.manifest)
     }
 }

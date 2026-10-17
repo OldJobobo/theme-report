@@ -1,6 +1,7 @@
 pub mod border;
 pub mod cache;
 pub mod color;
+pub mod contract;
 pub mod inputs;
 pub mod model;
 pub mod rules;

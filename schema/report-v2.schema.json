@@ -108,6 +108,44 @@
     },
     "summary": {
       "type": "string"
+    },
+    "runtimeContract": {
+      "description": "Current audits only: which mirrored Omarchy runtime behaviors were verified. Checks depending on an unverified behavior are unassessed.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "status",
+        "palette",
+        "selection",
+        "shell",
+        "unverified"
+      ],
+      "properties": {
+        "status": {
+          "enum": [
+            "reviewed",
+            "compatible",
+            "partial",
+            "unsupported",
+            "profile"
+          ]
+        },
+        "palette": {
+          "type": "boolean"
+        },
+        "selection": {
+          "type": "boolean"
+        },
+        "shell": {
+          "type": "boolean"
+        },
+        "unverified": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        }
+      }
     }
   },
   "$defs": {

@@ -24,8 +24,11 @@ ShellRoot {
             verify(refresh && refresh.enabled && refresh.iconText !== "" && refresh.tooltipText === "Refresh", "compact header Refresh")
             refresh.clicked(); verify(refreshCount === 1, "Refresh signal")
             panel.refreshing = true
-            verify(!refresh.enabled && panel.previous, "busy Refresh is disabled")
+            verify(!refresh.enabled && !panel.previous, "busy Refresh is disabled without flashing previous")
+            panel.slowRefresh = true
+            verify(panel.previous, "slow refresh labels previous evidence")
             panel.refreshing = false
+            verify(!panel.slowRefresh && !panel.previous, "finished refresh clears previous")
             panel.errorText = "Failure"; verify(panel.previous, "error retains previous evidence")
             panel.errorText = ""; verify(!panel.previous, "no stale state")
             var colors=panel.themeColors
@@ -54,6 +57,7 @@ ShellRoot {
             panel.copyPaletteColor("#d83a66"); verify(panel.copiedPaletteColor==="#d83a66","palette copy feedback")
             panel.report={themePath:"/semantic",theme:"semantic",grade:"A",state:"ready",capReasons:[],categories:[],findings:[Object.assign({},roles,{evidence:{paletteColors:{background:"#101315",red:"#ff7777",green:"#88ddaa",blue:"not-a-color"}}})]}
             verify(panel.paletteBanks.length===1 && panel.paletteBanks[0].length===2 && panel.paletteRoles.length===1 && panel.copiedPaletteColor==="","semantic-only palette, unsupported colors, copy reset")
+            verify(!Qt.colorEqual(panel.warning, panel.accent), "caution hue differs from accent")
             panel.report=null; verify(panel.paletteBanks.length===0 && panel.paletteRoles.length===0,"missing palette has no invented swatches")
             var pass=finding("pass",{contrast:8.12,required:4.5})
             verify(panel.belongs(pass,"passed") && !panel.belongs(pass,"issues"),"passing exploration")
@@ -73,8 +77,16 @@ ShellRoot {
             verify(panel.expandedRules["readability.bar"] && panel.technicalRules["readability.bar"],"detail retention during refresh")
             panel.report=Object.assign({},replacement,{theme:"another"})
             verify(!panel.expandedRules["readability.bar"] && !panel.technicalRules["readability.bar"],"detail reset on new theme")
+            var paused=function(id){var f=finding("unassessed",{runtimeContract:"partial",reason:"Changed Style.qml"});f.ruleId=id;f.remediation="Update.";return f}
+            panel.report={themePath:"/runtime",theme:"scooby-doo",grade:"A",state:"provisional",capReasons:[],categories:[],runtimeContract:{status:"partial",palette:true,unverified:["Style.qml control states"]},findings:[paused("readability.bar"),paused("shell.focus-fill"),finding("unassessed",{reason:"other"})]}
+            panel.selectedCategory="";panel.selectedGroup="unassessed"
+            var cards=panel.filteredFindings()
+            verify(cards.length===2 && cards[0].ruleId==="runtime.paused" && cards[0].remediation.indexOf("Status bar")>=0,"paused checks collapse into one card")
+            verify(panel.runtimePaused && namedItem(panel,"runtimeBanner").visible && namedItem(panel,"runtimeBanner").text.indexOf("Style.qml")>=0,"runtime banner")
+            verify(panel.displayName("scooby-doo")==="Scooby Doo","title-cased theme name")
+            panel.errorText="Analyzer error"; verify(namedItem(panel,"errorText").visible,"error shown in header"); panel.errorText=""
             verify(panel.safeColor("#aabbcc")==="#aabbcc" && String(panel.safeColor("red"))===String(panel.surface) && String(panel.safeColor("file:/etc/passwd"))===String(panel.surface),"safe swatches")
-            console.log("PASS: live theme palette/alpha/font, overview palette banks/roles/copy,  passing exploration, positive proof, shared/suppressed honesty, category filters/counts, refresh retention/reset, safe color previews")
+            console.log("PASS: live theme palette/alpha/font, caution hue, quick-refresh stability, paused-check grouping/banner, header errors, overview palette banks/roles/copy,  passing exploration, positive proof, shared/suppressed honesty, category filters/counts, refresh retention/reset, safe color previews")
         } catch (e) { console.error(String(e)) }
         Qt.callLater(function() { Qt.quit() })
     }
