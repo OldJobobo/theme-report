@@ -2,7 +2,7 @@ use anyhow::{Context, Result, bail};
 use clap::{Parser, Subcommand, ValueEnum};
 use std::path::PathBuf;
 use theme_report::{
-    cache,
+    agent, cache,
     inputs::{Config, PROFILE},
     model::Report,
     rules,
@@ -51,10 +51,100 @@ enum Commands {
         #[arg(long)]
         omarchy_root: Option<PathBuf>,
     },
+    /// Print a prompt for your agent, built from the latest current-theme report.
+    Prompt {
+        #[command(flatten)]
+        handoff: HandoffArgs,
+    },
+    /// Hand the latest report to your Omarchy default agent.
+    Agent {
+        #[command(flatten)]
+        handoff: HandoffArgs,
+        /// Open the agent in a new terminal window (default).
+        #[arg(long, conflicts_with = "copy")]
+        window: bool,
+        /// Copy the prompt to the clipboard instead of launching.
+        #[arg(long)]
+        copy: bool,
+    },
     #[command(hide = true)]
     DecodeImage {
         path: PathBuf,
     },
+}
+#[derive(clap::Args)]
+struct HandoffArgs {
+    /// fix: problems and cautions · measure: checks that could not be measured · explain: no edits · review: a thorough read-only review, saved as Markdown.
+    #[arg(value_parser = ["fix", "measure", "explain", "review"])]
+    kind: String,
+    /// Limit the prompt to one check.
+    #[arg(long)]
+    rule: Option<String>,
+    /// Use this report JSON instead of the latest current-theme report.
+    #[arg(long)]
+    report: Option<PathBuf>,
+    /// Report cache (defaults to $XDG_CACHE_HOME/theme-report).
+    #[arg(long)]
+    cache_dir: Option<PathBuf>,
+    /// Omarchy runtime root (defaults to OMARCHY_PATH, then /usr/share/omarchy).
+    #[arg(long)]
+    omarchy_root: Option<PathBuf>,
+}
+fn default_cache(home: &std::path::Path) -> PathBuf {
+    std::env::var_os("XDG_CACHE_HOME")
+        .filter(|v| !v.is_empty())
+        .map(PathBuf::from)
+        .unwrap_or_else(|| home.join(".cache"))
+        .join("theme-report")
+}
+/// Build the prompt for a handoff and write the report snapshot it cites.
+fn handoff(args: &HandoffArgs) -> Result<(agent::Env, agent::Prompt, Report)> {
+    let home = PathBuf::from(std::env::var_os("HOME").context("HOME is not set")?);
+    let cache = args
+        .cache_dir
+        .clone()
+        .unwrap_or_else(|| default_cache(&home));
+    let env = agent::Env::from_process(resolve_omarchy(args.omarchy_root.clone()), cache)?;
+    let path = args
+        .report
+        .clone()
+        .unwrap_or_else(|| env.cache.join("current.json"));
+    let text = std::fs::read_to_string(&path)
+        .with_context(|| "No report yet. Run theme-report audit --current first.")?;
+    let report: Report =
+        serde_json::from_str(&text).context("The report file is not a supported report")?;
+    if report.schema_version != 2 {
+        bail!("Unsupported report format")
+    }
+    if args.report.is_none() {
+        let active = std::fs::read_to_string(home.join(".local/state/omarchy/current/theme.name"))
+            .map(|t| t.trim().to_string())
+            .unwrap_or_default();
+        if !active.is_empty() && active != report.theme {
+            bail!(
+                "The last report is for {}, but the current theme is {}. Run theme-report audit --current first.",
+                display(&report.theme),
+                display(&active)
+            )
+        }
+    }
+    let kind = agent::Kind::parse(&args.kind).context("Unknown prompt kind")?;
+    let now = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .unwrap_or_default();
+    // Validate before writing anything, so a refused prompt leaves no handoff file.
+    agent::selected(&report, kind, args.rule.as_deref())?;
+    agent::workspace(&report, &env)?;
+    let file = agent::write_handoff(&env, &report, kind, now.as_millis() as u64)?;
+    let prompt = agent::prompt(
+        &report,
+        kind,
+        args.rule.as_deref(),
+        &env,
+        &file,
+        &agent::date_stamp(now.as_secs()),
+    )?;
+    Ok((env, prompt, report))
 }
 fn display(text: &str) -> String {
     text.chars()
@@ -139,6 +229,35 @@ fn run(cli: Cli) -> Result<()> {
                 Err(e) => serde_json::json!({"error":e.to_string()}),
             };
             println!("{result}");
+        }
+        Commands::Prompt { handoff: args } => {
+            let (_, prompt, _) = handoff(&args)?;
+            print!("{}", prompt.text);
+        }
+        Commands::Agent {
+            handoff: args,
+            window: _,
+            copy,
+        } => {
+            let (env, prompt, report) = handoff(&args)?;
+            let chosen = agent::default_agent(&env);
+            if copy {
+                agent::copy_to_clipboard(&prompt.text)?;
+                println!("copied");
+            } else if chosen.is_none() {
+                agent::pick_agent()?;
+                println!("no-agent");
+            } else {
+                if args.kind == "review" {
+                    let now = std::time::SystemTime::now()
+                        .duration_since(std::time::UNIX_EPOCH)
+                        .unwrap_or_default()
+                        .as_secs();
+                    agent::begin_review(&env, &report, chosen.as_deref().unwrap_or_default(), now)?;
+                }
+                agent::launch_window(prompt.workspace.workdir(), &prompt.text)?;
+                println!("launched");
+            }
         }
         Commands::Version => println!(
             "theme-report {} · rules {} · profile {PROFILE}",
