@@ -282,3 +282,25 @@ fn metadata_fast_path_reuses_cache_until_inputs_change() {
             .all(|e| !e.file_name().to_string_lossy().starts_with("run-"))
     );
 }
+
+#[test]
+fn closed_output_pipe_leaves_no_staging() {
+    let t = tmp();
+    let p = fixture(t.path());
+    let cache = t.path().join("cache");
+    let mut child = Command::new(env!("CARGO_BIN_EXE_theme-report"))
+        .args(["audit", p.to_str().unwrap(), "--profile", PROFILE])
+        .args(["--format", "json", "--cache-dir", cache.to_str().unwrap()])
+        .stdout(std::process::Stdio::piped())
+        .spawn()
+        .unwrap();
+    // Like `| head` exiting early: printing then ends the process with SIGPIPE.
+    drop(child.stdout.take());
+    child.wait().unwrap();
+    assert!(
+        fs::read_dir(&cache)
+            .unwrap()
+            .flatten()
+            .all(|e| !e.file_name().to_string_lossy().starts_with("run-"))
+    );
+}

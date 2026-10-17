@@ -248,7 +248,11 @@ fn run(cli: Cli) -> Result<()> {
                 cache: cache_dir,
                 profile,
             };
-            let report = cache::audit(&config, force)?;
+            let report = cache::audit(&config, force);
+            // Scratch is not needed for output; remove it before writing, since a closed
+            // pipe (e.g. `| head`) ends the process mid-print.
+            theme_report::cache::cleanup_staging();
+            let report = report?;
             match format {
                 Format::Json => println!("{}", serde_json::to_string_pretty(&report)?),
                 Format::Text => print_report(&report),

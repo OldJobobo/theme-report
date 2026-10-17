@@ -41,6 +41,7 @@ done
 "$binary" version >/dev/null 2>&1 || { echo "Cannot run $binary on this system (wrong architecture or damaged build)." >&2; exit 1; }
 $dry && exit 0
 updating=false
+plugin_changed=false
 [[ -f $receipt ]] && updating=true
 mkdir -p -- "$(dirname -- "$receipt")"
 tmp=$(mktemp -- "${receipt}.XXXXXX")
@@ -64,12 +65,20 @@ for i in "${!paths[@]}"; do
   mkdir -p -- "$(dirname -- "$target")"
   mode=644
   [[ ${paths[$i]} == .local/bin/* || ${paths[$i]} == .config/omarchy/hooks/* ]] && mode=755
-  install -m "$mode" -- "${sources[$i]}" "$target"
+  # Identical files are left alone: replacing QML under a running shell can crash it.
+  if cmp -s -- "${sources[$i]}" "$target"; then
+    chmod "$mode" -- "$target"
+  else
+    install -m "$mode" -- "${sources[$i]}" "$target"
+    [[ ${paths[$i]} == *.qml || ${paths[$i]} == */manifest.json ]] && plugin_changed=true
+  fi
   h=$(sha256sum -- "$target"); h=${h%% *}
   printf '%s\t%s\n' "$h" "${paths[$i]}" >> "$tmp"
 done
 mv -- "$tmp" "$receipt"
-if $updating; then
+if $updating && ! $plugin_changed; then
+  echo "Updated project-owned files. Plugin code is unchanged; no shell restart needed."
+elif $updating; then
   echo "Updated project-owned files."
   # Replacing QML under a running shell can crash Quickshell; load it with a clean restart.
   echo "Load the new plugin code: omarchy restart shell"
