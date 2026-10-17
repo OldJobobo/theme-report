@@ -1,0 +1,17 @@
+{
+  "schemaVersion": 1,
+  "id": "oldjobobo.theme-report",
+  "name": "Theme Report",
+  "version": "0.5.2",
+  "author": "OldJobobo",
+  "description": "Read-only Quattro theme health with reproducible evidence",
+  "kinds": ["bar-widget"],
+  "entryPoints": { "barWidget": "Main.qml" },
+  "barWidget": {
+    "displayName": "Theme Report",
+    "description": "Theme validity, readability, and modeled robustness",
+    "category": "Appearance",
+    "aliases": ["theme-report"],
+    "allowMultiple": false
+  }
+}

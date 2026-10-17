@@ -1,0 +1,69 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Theme Report v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schemaVersion", "analyzerVersion", "rulesetVersion", "profile", "omarchyVersion", "target", "theme", "themePath", "inputFingerprint", "state", "score", "coverage", "grade", "capReasons", "eligibilityReasons", "categories", "findings", "assumptions", "auditTimestamp", "watchedPaths"],
+  "properties": {
+    "schemaVersion": {"const": 1},
+    "analyzerVersion": {"type": "string"},
+    "rulesetVersion": {"type": "string"},
+    "profile": {"type": "string"},
+    "omarchyVersion": {"type": ["string", "null"]},
+    "target": {"enum": ["current", "materialized-path"]},
+    "theme": {"type": "string"},
+    "themePath": {"type": "string"},
+    "inputFingerprint": {"type": "string", "pattern": "^[a-f0-9]{64}$"},
+    "state": {"enum": ["ready", "incomplete"]},
+    "score": {"$ref": "#/$defs/percent"},
+    "coverage": {"$ref": "#/$defs/percent"},
+    "grade": {"enum": ["A", "B", "C", "D", "F", null]},
+    "capReasons": {"$ref": "#/$defs/strings"},
+    "eligibilityReasons": {"$ref": "#/$defs/strings"},
+    "assumptions": {"$ref": "#/$defs/strings"},
+    "watchedPaths": {"$ref": "#/$defs/strings"},
+    "auditTimestamp": {"type": "integer", "minimum": 0},
+    "categories": {"type": "array", "minItems": 5, "maxItems": 5, "items": {"$ref": "#/$defs/category"}},
+    "findings": {"type": "array", "items": {"$ref": "#/$defs/finding"}}
+  },
+  "$defs": {
+    "strings": {"type": "array", "items": {"type": "string"}},
+    "percent": {"type": ["number", "null"], "minimum": 0, "maximum": 100},
+    "category": {
+      "type": "object", "additionalProperties": false,
+      "required": ["id", "weight", "expected", "assessed", "lost", "score", "coverage"],
+      "properties": {
+        "id": {"enum": ["validity", "readability", "semantic", "shell", "wallpaper"]},
+        "weight": {"type": "number", "minimum": 0, "maximum": 30},
+        "expected": {"type": "number", "minimum": 0, "maximum": 30},
+        "assessed": {"type": "number", "minimum": 0, "maximum": 30},
+        "lost": {"type": "number", "minimum": 0, "maximum": 30},
+        "score": {"$ref": "#/$defs/percent"}, "coverage": {"$ref": "#/$defs/percent"}
+      }
+    },
+    "source": {
+      "type": "object", "additionalProperties": false,
+      "required": ["file", "section", "key"],
+      "properties": {"file": {"type": "string"}, "section": {"type": "string"}, "key": {"type": "string"}}
+    },
+    "finding": {
+      "type": "object", "additionalProperties": false,
+      "required": ["ruleId", "ruleVersion", "category", "severity", "assessmentStatus", "method", "scored", "policySuppressed", "budget", "assessedBudget", "pointsLost", "blocking", "mandatory", "summary", "evidence", "sources", "remediation"],
+      "properties": {
+        "ruleId": {"type": "string"}, "ruleVersion": {"type": "integer", "minimum": 1},
+        "category": {"enum": ["validity", "readability", "semantic", "shell", "wallpaper"]},
+        "severity": {"enum": ["pass", "caution", "failure", "advisory", "unassessed"]},
+        "assessmentStatus": {"enum": ["assessed", "unassessed", "not-applicable"]},
+        "method": {"enum": ["resolved-token", "modeled-appearance", "bounded-media-decode"]},
+        "scored": {"type": "boolean"}, "policySuppressed": {"type": "boolean"},
+        "blocking": {"type": "boolean"}, "mandatory": {"type": "boolean"},
+        "budget": {"type": "number", "minimum": 0, "maximum": 30},
+        "assessedBudget": {"type": "number", "minimum": 0, "maximum": 30},
+        "pointsLost": {"type": "number", "minimum": 0, "maximum": 30},
+        "summary": {"type": "string"}, "evidence": {"type": "object"},
+        "sources": {"type": "array", "items": {"$ref": "#/$defs/source"}},
+        "remediation": {"type": "string"}
+      }
+    }
+  }
+}

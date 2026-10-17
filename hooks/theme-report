@@ -1,0 +1,6 @@
+#!/usr/bin/env bash
+# Theme-set slug is intentionally ignored: re-resolve current inputs after acquiring the lock.
+if [[ -x $HOME/.local/bin/theme-report ]]; then
+  "$HOME/.local/bin/theme-report" audit --current --format json </dev/null >/dev/null 2>&1 &
+fi
+exit 0

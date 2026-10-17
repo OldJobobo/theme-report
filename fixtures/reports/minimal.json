@@ -1,0 +1,1207 @@
+{
+  "rulesetVersion": "5-experimental",
+  "score": 100.0,
+  "grade": "A",
+  "state": "ready",
+  "summary": "All checked areas look healthy.",
+  "categories": [
+    {
+      "id": "validity",
+      "weight": 20.0,
+      "expected": 20.0,
+      "assessed": 20.0,
+      "lost": 0.0,
+      "score": 100.0,
+      "grade": "A",
+      "state": "ready",
+      "summary": "No problems found"
+    },
+    {
+      "id": "readability",
+      "weight": 30.0,
+      "expected": 30.0,
+      "assessed": 30.0,
+      "lost": 0.0,
+      "score": 100.0,
+      "grade": "A",
+      "state": "ready",
+      "summary": "No problems found"
+    },
+    {
+      "id": "semantic",
+      "weight": 20.0,
+      "expected": 20.0,
+      "assessed": 20.0,
+      "lost": 0.0,
+      "score": 100.0,
+      "grade": "A",
+      "state": "ready",
+      "summary": "No problems found"
+    },
+    {
+      "id": "shell",
+      "weight": 20.0,
+      "expected": 20.0,
+      "assessed": 20.0,
+      "lost": 0.0,
+      "score": 100.0,
+      "grade": "A",
+      "state": "ready",
+      "summary": "No problems found"
+    },
+    {
+      "id": "wallpaper",
+      "weight": 10.0,
+      "expected": 10.0,
+      "assessed": 10.0,
+      "lost": 0.0,
+      "score": 100.0,
+      "grade": "A",
+      "state": "ready",
+      "summary": "No problems found"
+    }
+  ],
+  "findings": [
+    {
+      "ruleId": "validity.palette",
+      "ruleVersion": 1,
+      "category": "validity",
+      "severity": "pass",
+      "assessmentStatus": "assessed",
+      "method": "resolved-token",
+      "scored": true,
+      "policySuppressed": false,
+      "budget": 4.0,
+      "assessedBudget": 4.0,
+      "pointsLost": 0.0,
+      "blocking": true,
+      "mandatory": true,
+      "summary": "Palette parses as TOML",
+      "evidence": {
+        "file": "colors.toml",
+        "parseable": true
+      },
+      "sources": [
+        {
+          "file": "colors.toml",
+          "section": "",
+          "key": ""
+        },
+        {
+          "file": "colors.toml",
+          "section": "",
+          "key": ""
+        }
+      ],
+      "remediation": "No change needed."
+    },
+    {
+      "ruleId": "validity.roles",
+      "ruleVersion": 1,
+      "category": "validity",
+      "severity": "pass",
+      "assessmentStatus": "assessed",
+      "method": "resolved-token",
+      "scored": true,
+      "policySuppressed": false,
+      "budget": 8.0,
+      "assessedBudget": 8.0,
+      "pointsLost": 0.0,
+      "blocking": true,
+      "mandatory": true,
+      "summary": "Foundational roles resolve without transient state",
+      "evidence": {
+        "missingOrUnsupported": [],
+        "paletteColors": {
+          "accent": "#88bbff",
+          "background": "#101315",
+          "blue": "#88bbff",
+          "bright_foreground": "#f0f2f4",
+          "cyan": "#88dddd",
+          "foreground": "#f0f2f4",
+          "green": "#88ddaa",
+          "magenta": "#cc99ee",
+          "red": "#ff7777",
+          "selection": "#34475b",
+          "selection_background": "#34475b",
+          "selection_foreground": "#ffffff",
+          "urgent": "#ff7777",
+          "yellow": "#ffdd88"
+        },
+        "resolvedColors": {
+          "accent": "#88bbff",
+          "background": "#101315",
+          "foreground": "#f0f2f4",
+          "urgent": "#ff7777"
+        }
+      },
+      "sources": [
+        {
+          "file": "colors.toml",
+          "section": "",
+          "key": ""
+        },
+        {
+          "file": "colors.toml",
+          "section": "",
+          "key": ""
+        }
+      ],
+      "remediation": "No change needed."
+    },
+    {
+      "ruleId": "validity.shell",
+      "ruleVersion": 1,
+      "category": "validity",
+      "severity": "pass",
+      "assessmentStatus": "assessed",
+      "method": "resolved-token",
+      "scored": true,
+      "policySuppressed": false,
+      "budget": 4.0,
+      "assessedBudget": 4.0,
+      "pointsLost": 0.0,
+      "blocking": true,
+      "mandatory": true,
+      "summary": "Known shell domains and generated tokens are valid",
+      "evidence": {
+        "ignoredLines": [],
+        "invalidKeys": [],
+        "parser": "runtime-line-subset"
+      },
+      "sources": [
+        {
+          "file": "shell.toml",
+          "section": "",
+          "key": ""
+        },
+        {
+          "file": "profile.defaults",
+          "section": "",
+          "key": ""
+        }
+      ],
+      "remediation": "No change needed."
+    },
+    {
+      "ruleId": "validity.backgrounds",
+      "ruleVersion": 4,
+      "category": "validity",
+      "severity": "pass",
+      "assessmentStatus": "assessed",
+      "method": "bounded-media-decode",
+      "scored": true,
+      "policySuppressed": false,
+      "budget": 4.0,
+      "assessedBudget": 4.0,
+      "pointsLost": 0.0,
+      "blocking": false,
+      "mandatory": false,
+      "summary": "Wallpaper media parses and sampled frames decode",
+      "evidence": {
+        "decoded": 1,
+        "thumbnails": {
+          "backgrounds/night.png": {
+            "backend": "pinned-rust-image",
+            "gridSamples": 64,
+            "sampleColors": [
+              "#101315",
+              "#101315",
+              "#101315",
+              "#101315",
+              "#101315",
+              "#101315",
+              "#101315",
+              "#101315",
+              "#101315",
+              "#101315",
+              "#101315",
+              "#101315",
+              "#101315",
+              "#101315",
+              "#101315",
+              "#101315",
+              "#101315",
+              "#101315",
+              "#101315",
+              "#101315",
+              "#101315",
+              "#101315",
+              "#101315",
+              "#101315",
+              "#101315",
+              "#101315",
+              "#101315",
+              "#101315",
+              "#101315",
+              "#101315",
+              "#101315",
+              "#101315",
+              "#101315",
+              "#101315",
+              "#101315",
+              "#101315",
+              "#101315",
+              "#101315",
+              "#101315",
+              "#101315",
+              "#101315",
+              "#101315",
+              "#101315",
+              "#101315",
+              "#101315",
+              "#101315",
+              "#101315",
+              "#101315",
+              "#101315",
+              "#101315",
+              "#101315",
+              "#101315",
+              "#101315",
+              "#101315",
+              "#101315",
+              "#101315",
+              "#101315",
+              "#101315",
+              "#101315",
+              "#101315",
+              "#101315",
+              "#101315",
+              "#101315",
+              "#101315"
+            ],
+            "thumbnailHeight": 90,
+            "thumbnailWidth": 160
+          }
+        },
+        "videos": {}
+      },
+      "sources": [
+        {
+          "file": "backgrounds/",
+          "section": "",
+          "key": ""
+        },
+        {
+          "file": "backgrounds/night.png",
+          "section": "",
+          "key": ""
+        }
+      ],
+      "remediation": "No change needed."
+    },
+    {
+      "ruleId": "readability.foundation",
+      "ruleVersion": 1,
+      "category": "readability",
+      "severity": "pass",
+      "assessmentStatus": "assessed",
+      "method": "resolved-token",
+      "scored": true,
+      "policySuppressed": false,
+      "budget": 5.0,
+      "assessedBudget": 5.0,
+      "pointsLost": 0.0,
+      "blocking": false,
+      "mandatory": false,
+      "summary": "Foundational text contrast",
+      "evidence": {
+        "contrast": 16.618188714085147,
+        "effectiveBackground": "#101315",
+        "floor": 3.0,
+        "foreground": "#f0f2f4",
+        "required": 4.5
+      },
+      "sources": [
+        {
+          "file": "colors.toml",
+          "section": "",
+          "key": ""
+        },
+        {
+          "file": "colors.toml",
+          "section": "",
+          "key": "foreground"
+        },
+        {
+          "file": "colors.toml",
+          "section": "",
+          "key": "background"
+        }
+      ],
+      "remediation": "No change needed."
+    },
+    {
+      "ruleId": "readability.selection",
+      "ruleVersion": 1,
+      "category": "readability",
+      "severity": "pass",
+      "assessmentStatus": "assessed",
+      "method": "resolved-token",
+      "scored": true,
+      "policySuppressed": false,
+      "budget": 4.0,
+      "assessedBudget": 4.0,
+      "pointsLost": 0.0,
+      "blocking": false,
+      "mandatory": false,
+      "summary": "Terminal selected text contrast",
+      "evidence": {
+        "contrast": 9.552513183634966,
+        "effectiveBackground": "#34475b",
+        "floor": 3.0,
+        "foreground": "#ffffff",
+        "required": 4.5
+      },
+      "sources": [
+        {
+          "file": "colors.toml",
+          "section": "",
+          "key": ""
+        },
+        {
+          "file": "colors.toml",
+          "section": "",
+          "key": "selection_foreground"
+        },
+        {
+          "file": "colors.toml",
+          "section": "",
+          "key": "selection_background"
+        }
+      ],
+      "remediation": "No change needed."
+    },
+    {
+      "ruleId": "readability.bar",
+      "ruleVersion": 1,
+      "category": "readability",
+      "severity": "pass",
+      "assessmentStatus": "assessed",
+      "method": "resolved-token",
+      "scored": true,
+      "policySuppressed": false,
+      "budget": 3.0,
+      "assessedBudget": 3.0,
+      "pointsLost": 0.0,
+      "blocking": false,
+      "mandatory": false,
+      "summary": "bar text contrast",
+      "evidence": {
+        "contrast": 16.618188714085147,
+        "effectiveBackground": "#101315",
+        "floor": 3.0,
+        "foreground": "#f0f2f4",
+        "required": 4.5
+      },
+      "sources": [
+        {
+          "file": "shell.toml",
+          "section": "",
+          "key": ""
+        },
+        {
+          "file": "profile.defaults",
+          "section": "bar",
+          "key": "background"
+        },
+        {
+          "file": "profile.defaults",
+          "section": "bar",
+          "key": "background-alpha"
+        },
+        {
+          "file": "profile.defaults",
+          "section": "bar",
+          "key": "text"
+        },
+        {
+          "file": "profile.defaults",
+          "section": "bar",
+          "key": "text"
+        }
+      ],
+      "remediation": "No change needed."
+    },
+    {
+      "ruleId": "readability.popups",
+      "ruleVersion": 1,
+      "category": "readability",
+      "severity": "pass",
+      "assessmentStatus": "assessed",
+      "method": "resolved-token",
+      "scored": true,
+      "policySuppressed": false,
+      "budget": 3.0,
+      "assessedBudget": 3.0,
+      "pointsLost": 0.0,
+      "blocking": false,
+      "mandatory": false,
+      "summary": "popups text contrast",
+      "evidence": {
+        "contrast": 16.618188714085147,
+        "effectiveBackground": "#101315",
+        "floor": 3.0,
+        "foreground": "#f0f2f4",
+        "required": 4.5
+      },
+      "sources": [
+        {
+          "file": "shell.toml",
+          "section": "",
+          "key": ""
+        },
+        {
+          "file": "profile.defaults",
+          "section": "popups",
+          "key": "background"
+        },
+        {
+          "file": "profile.defaults",
+          "section": "popups",
+          "key": "background-alpha"
+        },
+        {
+          "file": "profile.defaults",
+          "section": "popups",
+          "key": "text"
+        },
+        {
+          "file": "profile.defaults",
+          "section": "popups",
+          "key": "text"
+        }
+      ],
+      "remediation": "No change needed."
+    },
+    {
+      "ruleId": "readability.notifications",
+      "ruleVersion": 1,
+      "category": "readability",
+      "severity": "pass",
+      "assessmentStatus": "assessed",
+      "method": "resolved-token",
+      "scored": true,
+      "policySuppressed": false,
+      "budget": 3.0,
+      "assessedBudget": 3.0,
+      "pointsLost": 0.0,
+      "blocking": false,
+      "mandatory": false,
+      "summary": "notifications text contrast",
+      "evidence": {
+        "contrast": 16.618188714085147,
+        "effectiveBackground": "#101315",
+        "floor": 3.0,
+        "foreground": "#f0f2f4",
+        "required": 4.5
+      },
+      "sources": [
+        {
+          "file": "shell.toml",
+          "section": "",
+          "key": ""
+        },
+        {
+          "file": "profile.defaults",
+          "section": "notifications",
+          "key": "background"
+        },
+        {
+          "file": "profile.defaults",
+          "section": "notifications",
+          "key": "background-alpha"
+        },
+        {
+          "file": "profile.defaults",
+          "section": "notifications",
+          "key": "text"
+        },
+        {
+          "file": "profile.defaults",
+          "section": "notifications",
+          "key": "text"
+        }
+      ],
+      "remediation": "No change needed."
+    },
+    {
+      "ruleId": "readability.menu.selected",
+      "ruleVersion": 1,
+      "category": "readability",
+      "severity": "pass",
+      "assessmentStatus": "assessed",
+      "method": "resolved-token",
+      "scored": true,
+      "policySuppressed": false,
+      "budget": 4.0,
+      "assessedBudget": 4.0,
+      "pointsLost": 0.0,
+      "blocking": false,
+      "mandatory": false,
+      "summary": "menu text contrast",
+      "evidence": {
+        "contrast": 7.796406419084601,
+        "effectiveBackground": "#222527",
+        "floor": 3.0,
+        "foreground": "#88bbff",
+        "required": 4.5
+      },
+      "sources": [
+        {
+          "file": "shell.toml",
+          "section": "",
+          "key": ""
+        },
+        {
+          "file": "profile.defaults",
+          "section": "menu",
+          "key": "background"
+        },
+        {
+          "file": "profile.defaults",
+          "section": "menu",
+          "key": "background-alpha"
+        },
+        {
+          "file": "profile.defaults",
+          "section": "menu",
+          "key": "selected-text"
+        },
+        {
+          "file": "profile.defaults",
+          "section": "menu",
+          "key": "selected-background"
+        },
+        {
+          "file": "profile.defaults",
+          "section": "menu",
+          "key": "selected-background-alpha"
+        },
+        {
+          "file": "profile.defaults",
+          "section": "menu",
+          "key": "selected-text"
+        }
+      ],
+      "remediation": "No change needed."
+    },
+    {
+      "ruleId": "readability.launcher.selected",
+      "ruleVersion": 4,
+      "category": "readability",
+      "severity": "pass",
+      "assessmentStatus": "assessed",
+      "method": "modeled-appearance",
+      "scored": true,
+      "policySuppressed": false,
+      "budget": 2.0,
+      "assessedBudget": 2.0,
+      "pointsLost": 0.0,
+      "blocking": false,
+      "mandatory": false,
+      "summary": "launcher text contrast",
+      "evidence": {
+        "backgroundModel": "application-gray17-v4",
+        "backgroundSamples": 17,
+        "contrast": 7.261515759937704,
+        "effectiveBackground": "#272a2c",
+        "foreground": "#88bbff",
+        "required": 4.5,
+        "scope": "text contrast over reference dark-to-light application backgrounds, not captured live windows"
+      },
+      "sources": [
+        {
+          "file": "shell.toml",
+          "section": "",
+          "key": ""
+        },
+        {
+          "file": "profile.defaults",
+          "section": "launcher",
+          "key": "background"
+        },
+        {
+          "file": "profile.defaults",
+          "section": "launcher",
+          "key": "background-alpha"
+        },
+        {
+          "file": "profile.defaults",
+          "section": "launcher",
+          "key": "selected-text"
+        },
+        {
+          "file": "profile.defaults",
+          "section": "launcher",
+          "key": "selected-background"
+        },
+        {
+          "file": "profile.defaults",
+          "section": "launcher",
+          "key": "selected-background-alpha"
+        }
+      ],
+      "remediation": "Increase this surface's background-alpha or adjust its text/background colors to reach 4.5:1 across the reference background scenarios."
+    },
+    {
+      "ruleId": "readability.polkit",
+      "ruleVersion": 1,
+      "category": "readability",
+      "severity": "pass",
+      "assessmentStatus": "assessed",
+      "method": "resolved-token",
+      "scored": true,
+      "policySuppressed": false,
+      "budget": 3.0,
+      "assessedBudget": 3.0,
+      "pointsLost": 0.0,
+      "blocking": false,
+      "mandatory": false,
+      "summary": "polkit text contrast",
+      "evidence": {
+        "contrast": 16.618188714085147,
+        "effectiveBackground": "#101315",
+        "floor": 3.0,
+        "foreground": "#f0f2f4",
+        "required": 4.5
+      },
+      "sources": [
+        {
+          "file": "shell.toml",
+          "section": "",
+          "key": ""
+        },
+        {
+          "file": "profile.defaults",
+          "section": "polkit",
+          "key": "background"
+        },
+        {
+          "file": "profile.defaults",
+          "section": "polkit",
+          "key": "background-alpha"
+        },
+        {
+          "file": "profile.defaults",
+          "section": "polkit",
+          "key": "text"
+        },
+        {
+          "file": "profile.defaults",
+          "section": "polkit",
+          "key": "text"
+        }
+      ],
+      "remediation": "No change needed."
+    },
+    {
+      "ruleId": "readability.lock",
+      "ruleVersion": 3,
+      "category": "readability",
+      "severity": "pass",
+      "assessmentStatus": "assessed",
+      "method": "modeled-appearance",
+      "scored": true,
+      "policySuppressed": false,
+      "budget": 2.0,
+      "assessedBudget": 2.0,
+      "pointsLost": 0.0,
+      "blocking": false,
+      "mandatory": false,
+      "summary": "lock text contrast",
+      "evidence": {
+        "background": "backgrounds/night.png",
+        "context": "wallpaper-backed",
+        "contrast": 16.618188714085147,
+        "effectiveBackground": "#101315",
+        "excludes": "native blur, lock video dimming, monitor transforms",
+        "foreground": "#f0f2f4",
+        "required": 4.5,
+        "sampleModel": "center-crop-160x90-grid8-video5-v2"
+      },
+      "sources": [
+        {
+          "file": "shell.toml",
+          "section": "",
+          "key": ""
+        },
+        {
+          "file": "profile.defaults",
+          "section": "lock",
+          "key": "background"
+        },
+        {
+          "file": "profile.defaults",
+          "section": "lock",
+          "key": "background-alpha"
+        },
+        {
+          "file": "profile.defaults",
+          "section": "lock",
+          "key": "text"
+        },
+        {
+          "file": "backgrounds/night.png",
+          "section": "",
+          "key": ""
+        }
+      ],
+      "remediation": "No change needed."
+    },
+    {
+      "ruleId": "readability.tooltip",
+      "ruleVersion": 4,
+      "category": "readability",
+      "severity": "pass",
+      "assessmentStatus": "assessed",
+      "method": "modeled-appearance",
+      "scored": true,
+      "policySuppressed": false,
+      "budget": 1.0,
+      "assessedBudget": 1.0,
+      "pointsLost": 0.0,
+      "blocking": false,
+      "mandatory": false,
+      "summary": "tooltip text contrast",
+      "evidence": {
+        "backgroundModel": "application-gray17-v4",
+        "backgroundSamples": 17,
+        "contrast": 15.566428352972764,
+        "effectiveBackground": "#171a1c",
+        "foreground": "#f0f2f4",
+        "required": 4.5,
+        "scope": "text contrast over reference dark-to-light application backgrounds, not captured live windows"
+      },
+      "sources": [
+        {
+          "file": "shell.toml",
+          "section": "",
+          "key": ""
+        },
+        {
+          "file": "profile.defaults",
+          "section": "tooltip",
+          "key": "background"
+        },
+        {
+          "file": "profile.defaults",
+          "section": "tooltip",
+          "key": "background-alpha"
+        },
+        {
+          "file": "profile.defaults",
+          "section": "tooltip",
+          "key": "text"
+        }
+      ],
+      "remediation": "Increase this surface's background-alpha or adjust its text/background colors to reach 4.5:1 across the reference background scenarios."
+    },
+    {
+      "ruleId": "semantic.accent",
+      "ruleVersion": 1,
+      "category": "semantic",
+      "severity": "pass",
+      "assessmentStatus": "assessed",
+      "method": "resolved-token",
+      "scored": true,
+      "policySuppressed": false,
+      "budget": 8.0,
+      "assessedBudget": 8.0,
+      "pointsLost": 0.0,
+      "blocking": false,
+      "mandatory": false,
+      "summary": "Accent indicator contrasts with the foundation",
+      "evidence": {
+        "contrast": 9.412868132348043,
+        "effectiveBackground": "#101315",
+        "floor": 1.5,
+        "foreground": "#88bbff",
+        "required": 3.0
+      },
+      "sources": [
+        {
+          "file": "colors.toml",
+          "section": "",
+          "key": ""
+        },
+        {
+          "file": "colors.toml",
+          "section": "",
+          "key": "accent"
+        },
+        {
+          "file": "colors.toml",
+          "section": "",
+          "key": "background"
+        }
+      ],
+      "remediation": "No change needed."
+    },
+    {
+      "ruleId": "semantic.error-indicator",
+      "ruleVersion": 1,
+      "category": "semantic",
+      "severity": "pass",
+      "assessmentStatus": "assessed",
+      "method": "resolved-token",
+      "scored": true,
+      "policySuppressed": false,
+      "budget": 6.0,
+      "assessedBudget": 6.0,
+      "pointsLost": 0.0,
+      "blocking": false,
+      "mandatory": false,
+      "summary": "Error indicator contrasts with the foundation",
+      "evidence": {
+        "contrast": 7.244266804303173,
+        "effectiveBackground": "#101315",
+        "floor": 1.5,
+        "foreground": "#ff7777",
+        "required": 3.0
+      },
+      "sources": [
+        {
+          "file": "colors.toml",
+          "section": "",
+          "key": ""
+        },
+        {
+          "file": "colors.toml",
+          "section": "",
+          "key": "red"
+        },
+        {
+          "file": "colors.toml",
+          "section": "",
+          "key": "background"
+        }
+      ],
+      "remediation": "No change needed."
+    },
+    {
+      "ruleId": "semantic.selection",
+      "ruleVersion": 1,
+      "category": "semantic",
+      "severity": "pass",
+      "assessmentStatus": "assessed",
+      "method": "resolved-token",
+      "scored": true,
+      "policySuppressed": false,
+      "budget": 6.0,
+      "assessedBudget": 6.0,
+      "pointsLost": 0.0,
+      "blocking": false,
+      "mandatory": false,
+      "summary": "Terminal selection differs from ordinary surface",
+      "evidence": {
+        "floor": 0.02,
+        "normalColor": "#101315",
+        "oklabDistance": 0.2092351984230243,
+        "required": 0.05,
+        "stateColor": "#34475b"
+      },
+      "sources": [
+        {
+          "file": "colors.toml",
+          "section": "",
+          "key": ""
+        },
+        {
+          "file": "colors.toml",
+          "section": "",
+          "key": "selection_background"
+        }
+      ],
+      "remediation": "No change needed."
+    },
+    {
+      "ruleId": "shell.selected-fill",
+      "ruleVersion": 4,
+      "category": "shell",
+      "severity": "pass",
+      "assessmentStatus": "assessed",
+      "method": "modeled-appearance",
+      "scored": true,
+      "policySuppressed": false,
+      "budget": 8.0,
+      "assessedBudget": 8.0,
+      "pointsLost": 0.0,
+      "blocking": false,
+      "mandatory": false,
+      "summary": "Shared selected fill provides a modeled cue",
+      "evidence": {
+        "backgroundModel": "opaque-resolved-surface",
+        "backgroundSamples": 1,
+        "normalColor": "#191c1e",
+        "oklabDistance": 0.12707429692980418,
+        "required": 0.02,
+        "scope": "sampled shared fill visibility only; weak fill is a caution, not proof that redundant labels/icons/borders fail",
+        "stateColor": "#383b3d"
+      },
+      "sources": [
+        {
+          "file": "shell.toml",
+          "section": "",
+          "key": ""
+        },
+        {
+          "file": "profile.defaults",
+          "section": "controls",
+          "key": "normal-color"
+        },
+        {
+          "file": "profile.defaults",
+          "section": "controls",
+          "key": "normal-fill-alpha"
+        },
+        {
+          "file": "profile.defaults",
+          "section": "controls",
+          "key": "selected-color"
+        },
+        {
+          "file": "profile.defaults",
+          "section": "controls",
+          "key": "selected-fill-alpha"
+        },
+        {
+          "file": "profile.defaults",
+          "section": "controls",
+          "key": "selected-fill-alpha"
+        }
+      ],
+      "remediation": "Increase the difference between normal and selected/focused fills if a stronger color cue is needed. Labels, icons, and borders may supply additional cues."
+    },
+    {
+      "ruleId": "shell.focus-fill",
+      "ruleVersion": 4,
+      "category": "shell",
+      "severity": "pass",
+      "assessmentStatus": "assessed",
+      "method": "modeled-appearance",
+      "scored": true,
+      "policySuppressed": false,
+      "budget": 6.0,
+      "assessedBudget": 6.0,
+      "pointsLost": 0.0,
+      "blocking": false,
+      "mandatory": false,
+      "summary": "Shared focus fill provides a modeled cue",
+      "evidence": {
+        "backgroundModel": "opaque-resolved-surface",
+        "backgroundSamples": 1,
+        "normalColor": "#191c1e",
+        "oklabDistance": 0.03781126513154785,
+        "required": 0.02,
+        "scope": "sampled shared fill visibility only; weak fill is a caution, not proof that redundant labels/icons/borders fail",
+        "stateColor": "#222527"
+      },
+      "sources": [
+        {
+          "file": "shell.toml",
+          "section": "",
+          "key": ""
+        },
+        {
+          "file": "profile.defaults",
+          "section": "controls",
+          "key": "normal-color"
+        },
+        {
+          "file": "profile.defaults",
+          "section": "controls",
+          "key": "normal-fill-alpha"
+        },
+        {
+          "file": "profile.defaults",
+          "section": "controls",
+          "key": "focus-color"
+        },
+        {
+          "file": "profile.defaults",
+          "section": "controls",
+          "key": "focus-fill-alpha"
+        },
+        {
+          "file": "profile.defaults",
+          "section": "controls",
+          "key": "focus-fill-alpha"
+        }
+      ],
+      "remediation": "Increase the difference between normal and selected/focused fills if a stronger color cue is needed. Labels, icons, and borders may supply additional cues."
+    },
+    {
+      "ruleId": "shell.popup-border",
+      "ruleVersion": 5,
+      "category": "shell",
+      "severity": "pass",
+      "assessmentStatus": "assessed",
+      "method": "modeled-appearance",
+      "scored": true,
+      "policySuppressed": false,
+      "budget": 6.0,
+      "assessedBudget": 6.0,
+      "pointsLost": 0.0,
+      "blocking": false,
+      "mandatory": false,
+      "summary": "Popup border separates from its surface",
+      "evidence": {
+        "backgroundModel": "opaque-resolved-surface",
+        "backgroundSamples": 1,
+        "borderSamples": 1,
+        "contrast": 9.412868132348043,
+        "effectiveBackground": "#101315",
+        "foreground": "#88bbff",
+        "required": 3.0,
+        "scope": "sampled native border colors against modeled popup interiors; no live geometry/pixel certification"
+      },
+      "sources": [
+        {
+          "file": "shell.toml",
+          "section": "",
+          "key": ""
+        },
+        {
+          "file": "profile.defaults",
+          "section": "popups",
+          "key": "border"
+        }
+      ],
+      "remediation": "Adjust popup border colors/alpha or background opacity to reach 3:1 across the reference backgrounds."
+    },
+    {
+      "ruleId": "wallpaper.lock-model",
+      "ruleVersion": 3,
+      "category": "wallpaper",
+      "severity": "pass",
+      "assessmentStatus": "assessed",
+      "method": "modeled-appearance",
+      "scored": true,
+      "policySuppressed": false,
+      "budget": 5.0,
+      "assessedBudget": 5.0,
+      "pointsLost": 0.0,
+      "blocking": false,
+      "mandatory": false,
+      "summary": "lock text under the fixed wallpaper stress model",
+      "evidence": {
+        "background": "backgrounds/night.png",
+        "contrast": 16.618188714085147,
+        "effectiveBackground": "#101315",
+        "excludes": "blur, application content, monitor transforms",
+        "foreground": "#f0f2f4",
+        "referenceDefectOwnedByReadability": false,
+        "required": 4.5,
+        "sampleModel": "center-crop-160x90-grid8-video5-v2",
+        "scope": "sampled wallpaper-backed lock",
+        "videoSamples": {}
+      },
+      "sources": [
+        {
+          "file": "shell.toml",
+          "section": "",
+          "key": ""
+        },
+        {
+          "file": "profile.defaults",
+          "section": "lock",
+          "key": "background"
+        },
+        {
+          "file": "profile.defaults",
+          "section": "lock",
+          "key": "background-alpha"
+        },
+        {
+          "file": "profile.defaults",
+          "section": "lock",
+          "key": "text"
+        },
+        {
+          "file": "backgrounds/night.png",
+          "section": "",
+          "key": ""
+        }
+      ],
+      "remediation": "No change needed."
+    },
+    {
+      "ruleId": "wallpaper.launcher-model",
+      "ruleVersion": 3,
+      "category": "wallpaper",
+      "severity": "pass",
+      "assessmentStatus": "assessed",
+      "method": "modeled-appearance",
+      "scored": true,
+      "policySuppressed": false,
+      "budget": 5.0,
+      "assessedBudget": 5.0,
+      "pointsLost": 0.0,
+      "blocking": false,
+      "mandatory": false,
+      "summary": "launcher text under the fixed wallpaper stress model",
+      "evidence": {
+        "background": "backgrounds/night.png",
+        "contrast": 7.796406419084601,
+        "effectiveBackground": "#222527",
+        "excludes": "blur, application content, monitor transforms",
+        "foreground": "#88bbff",
+        "referenceDefectOwnedByReadability": false,
+        "required": 4.5,
+        "sampleModel": "center-crop-160x90-grid8-video5-v2",
+        "scope": "launcher-over-wallpaper stress scenario, not live application-backed contrast",
+        "videoSamples": {}
+      },
+      "sources": [
+        {
+          "file": "shell.toml",
+          "section": "",
+          "key": ""
+        },
+        {
+          "file": "profile.defaults",
+          "section": "launcher",
+          "key": "background"
+        },
+        {
+          "file": "profile.defaults",
+          "section": "launcher",
+          "key": "background-alpha"
+        },
+        {
+          "file": "profile.defaults",
+          "section": "launcher",
+          "key": "selected-text"
+        },
+        {
+          "file": "profile.defaults",
+          "section": "launcher",
+          "key": "selected-background"
+        },
+        {
+          "file": "profile.defaults",
+          "section": "launcher",
+          "key": "selected-background-alpha"
+        },
+        {
+          "file": "profile.defaults",
+          "section": "launcher",
+          "key": "scrim"
+        },
+        {
+          "file": "profile.defaults",
+          "section": "launcher",
+          "key": "scrim-alpha"
+        },
+        {
+          "file": "backgrounds/night.png",
+          "section": "",
+          "key": ""
+        }
+      ],
+      "remediation": "No change needed."
+    }
+  ],
+  "capReasons": []
+}

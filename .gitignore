@@ -1,0 +1,6 @@
+/target/
+/.build/
+/.testbed/
+/staging/
+/evidence/*.raw
+/dist/

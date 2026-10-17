@@ -1,0 +1,263 @@
+{
+  "score": 100.0,
+  "grade": "A",
+  "state": "ready",
+  "capReasons": [],
+  "categories": [
+    {
+      "id": "validity",
+      "weight": 20.0,
+      "expected": 20.0,
+      "assessed": 20.0,
+      "lost": 0.0,
+      "score": 100.0,
+      "grade": "A",
+      "state": "ready",
+      "summary": "No problems found"
+    },
+    {
+      "id": "readability",
+      "weight": 30.0,
+      "expected": 30.0,
+      "assessed": 30.0,
+      "lost": 0.0,
+      "score": 100.0,
+      "grade": "A",
+      "state": "ready",
+      "summary": "No problems found"
+    },
+    {
+      "id": "semantic",
+      "weight": 20.0,
+      "expected": 20.0,
+      "assessed": 20.0,
+      "lost": 0.0,
+      "score": 100.0,
+      "grade": "A",
+      "state": "ready",
+      "summary": "No problems found"
+    },
+    {
+      "id": "shell",
+      "weight": 20.0,
+      "expected": 20.0,
+      "assessed": 20.0,
+      "lost": 0.0,
+      "score": 100.0,
+      "grade": "A",
+      "state": "ready",
+      "summary": "No problems found"
+    },
+    {
+      "id": "wallpaper",
+      "weight": 10.0,
+      "expected": 10.0,
+      "assessed": 10.0,
+      "lost": 0.0,
+      "score": 100.0,
+      "grade": "A",
+      "state": "ready",
+      "summary": "No problems found"
+    }
+  ],
+  "findings": [
+    {
+      "ruleId": "validity.palette",
+      "budget": 4.0,
+      "assessedBudget": 4.0,
+      "pointsLost": 0.0,
+      "assessmentStatus": "assessed",
+      "severity": "pass",
+      "policySuppressed": false
+    },
+    {
+      "ruleId": "validity.roles",
+      "budget": 8.0,
+      "assessedBudget": 8.0,
+      "pointsLost": 0.0,
+      "assessmentStatus": "assessed",
+      "severity": "pass",
+      "policySuppressed": false
+    },
+    {
+      "ruleId": "validity.shell",
+      "budget": 4.0,
+      "assessedBudget": 4.0,
+      "pointsLost": 0.0,
+      "assessmentStatus": "assessed",
+      "severity": "pass",
+      "policySuppressed": false
+    },
+    {
+      "ruleId": "validity.backgrounds",
+      "budget": 4.0,
+      "assessedBudget": 4.0,
+      "pointsLost": 0.0,
+      "assessmentStatus": "assessed",
+      "severity": "pass",
+      "policySuppressed": false
+    },
+    {
+      "ruleId": "readability.foundation",
+      "budget": 5.0,
+      "assessedBudget": 5.0,
+      "pointsLost": 0.0,
+      "assessmentStatus": "assessed",
+      "severity": "pass",
+      "policySuppressed": false
+    },
+    {
+      "ruleId": "readability.selection",
+      "budget": 4.0,
+      "assessedBudget": 4.0,
+      "pointsLost": 0.0,
+      "assessmentStatus": "assessed",
+      "severity": "pass",
+      "policySuppressed": false
+    },
+    {
+      "ruleId": "readability.bar",
+      "budget": 3.0,
+      "assessedBudget": 3.0,
+      "pointsLost": 0.0,
+      "assessmentStatus": "assessed",
+      "severity": "pass",
+      "policySuppressed": false
+    },
+    {
+      "ruleId": "readability.popups",
+      "budget": 3.0,
+      "assessedBudget": 3.0,
+      "pointsLost": 0.0,
+      "assessmentStatus": "assessed",
+      "severity": "pass",
+      "policySuppressed": false
+    },
+    {
+      "ruleId": "readability.notifications",
+      "budget": 3.0,
+      "assessedBudget": 3.0,
+      "pointsLost": 0.0,
+      "assessmentStatus": "assessed",
+      "severity": "pass",
+      "policySuppressed": false
+    },
+    {
+      "ruleId": "readability.menu.selected",
+      "budget": 4.0,
+      "assessedBudget": 4.0,
+      "pointsLost": 0.0,
+      "assessmentStatus": "assessed",
+      "severity": "pass",
+      "policySuppressed": false
+    },
+    {
+      "ruleId": "readability.launcher.selected",
+      "budget": 2.0,
+      "assessedBudget": 2.0,
+      "pointsLost": 0.0,
+      "assessmentStatus": "assessed",
+      "severity": "pass",
+      "policySuppressed": false
+    },
+    {
+      "ruleId": "readability.polkit",
+      "budget": 3.0,
+      "assessedBudget": 3.0,
+      "pointsLost": 0.0,
+      "assessmentStatus": "assessed",
+      "severity": "pass",
+      "policySuppressed": false
+    },
+    {
+      "ruleId": "readability.lock",
+      "budget": 2.0,
+      "assessedBudget": 2.0,
+      "pointsLost": 0.0,
+      "assessmentStatus": "assessed",
+      "severity": "pass",
+      "policySuppressed": false
+    },
+    {
+      "ruleId": "readability.tooltip",
+      "budget": 1.0,
+      "assessedBudget": 1.0,
+      "pointsLost": 0.0,
+      "assessmentStatus": "assessed",
+      "severity": "pass",
+      "policySuppressed": false
+    },
+    {
+      "ruleId": "semantic.accent",
+      "budget": 8.0,
+      "assessedBudget": 8.0,
+      "pointsLost": 0.0,
+      "assessmentStatus": "assessed",
+      "severity": "pass",
+      "policySuppressed": false
+    },
+    {
+      "ruleId": "semantic.error-indicator",
+      "budget": 6.0,
+      "assessedBudget": 6.0,
+      "pointsLost": 0.0,
+      "assessmentStatus": "assessed",
+      "severity": "pass",
+      "policySuppressed": false
+    },
+    {
+      "ruleId": "semantic.selection",
+      "budget": 6.0,
+      "assessedBudget": 6.0,
+      "pointsLost": 0.0,
+      "assessmentStatus": "assessed",
+      "severity": "pass",
+      "policySuppressed": false
+    },
+    {
+      "ruleId": "shell.selected-fill",
+      "budget": 8.0,
+      "assessedBudget": 8.0,
+      "pointsLost": 0.0,
+      "assessmentStatus": "assessed",
+      "severity": "pass",
+      "policySuppressed": false
+    },
+    {
+      "ruleId": "shell.focus-fill",
+      "budget": 6.0,
+      "assessedBudget": 6.0,
+      "pointsLost": 0.0,
+      "assessmentStatus": "assessed",
+      "severity": "pass",
+      "policySuppressed": false
+    },
+    {
+      "ruleId": "shell.popup-border",
+      "budget": 6.0,
+      "assessedBudget": 6.0,
+      "pointsLost": 0.0,
+      "assessmentStatus": "assessed",
+      "severity": "pass",
+      "policySuppressed": false
+    },
+    {
+      "ruleId": "wallpaper.lock-model",
+      "budget": 5.0,
+      "assessedBudget": 5.0,
+      "pointsLost": 0.0,
+      "assessmentStatus": "assessed",
+      "severity": "pass",
+      "policySuppressed": false
+    },
+    {
+      "ruleId": "wallpaper.launcher-model",
+      "budget": 5.0,
+      "assessedBudget": 5.0,
+      "pointsLost": 0.0,
+      "assessmentStatus": "assessed",
+      "severity": "pass",
+      "policySuppressed": false
+    }
+  ]
+}

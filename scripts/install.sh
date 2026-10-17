@@ -1,0 +1,62 @@
+#!/usr/bin/env bash
+set -euo pipefail
+root=$HOME
+binary=""
+dry=false
+hook=false
+while (($#)); do
+  case "$1" in
+    --root) root=${2:?}; shift 2;;
+    --binary) binary=${2:?}; shift 2;;
+    --with-hook) hook=true; shift;;
+    --dry-run) dry=true; shift;;
+    *) echo "Usage: install.sh [--root DIR] [--binary FILE] [--with-hook] [--dry-run]" >&2; exit 2;;
+  esac
+done
+repo=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd)
+binary=${binary:-$repo/target/release/theme-report}
+[[ -f $binary ]] || { echo "Build with cargo build --release --locked first." >&2; exit 1; }
+root=$(realpath -m -- "$root")
+[[ $root != *$'\n'* && $root != *$'\t'* ]] || { echo "Unsupported root name" >&2; exit 1; }
+plugin=.config/omarchy/plugins/oldjobobo.theme-report
+receipt="$root/$plugin/.theme-report-owned"
+paths=(.local/bin/theme-report "$plugin/manifest.json" "$plugin/Main.qml" "$plugin/ReportPanel.qml")
+sources=("$binary" "$repo/plugin/manifest.json" "$repo/plugin/Main.qml" "$repo/plugin/ReportPanel.qml")
+if $hook; then paths+=(.config/omarchy/hooks/theme-set.d/theme-report); sources+=("$repo/hooks/theme-report"); fi
+# Check every target and its parent chain before making any changes.
+for rel in "${paths[@]}" "$plugin/.theme-report-owned"; do
+  target="$root/$rel"
+  parent=$target
+  while [[ $parent != "$root" && $parent != / ]]; do
+    [[ ! -L $parent ]] || { echo "Refusing symlink destination: $parent" >&2; exit 1; }
+    parent=$(dirname -- "$parent")
+  done
+  if [[ -e $target && $target != "$receipt" ]]; then
+    [[ -f $receipt ]] || { echo "Unowned destination: $target" >&2; exit 1; }
+    actual=$(sha256sum -- "$target"); actual=${actual%% *}
+    grep -Fqx -- "$actual"$'\t'"$rel" "$receipt" || { echo "Modified or unowned destination: $target" >&2; exit 1; }
+  fi
+  if $dry; then printf 'Would install: %s\n' "$target"; else printf 'Install target: %s\n' "$target"; fi
+done
+$dry && exit 0
+mkdir -p -- "$(dirname -- "$receipt")"
+tmp=$(mktemp -- "${receipt}.XXXXXX")
+trap 'rm -f -- "$tmp"' EXIT
+# Preserve ownership of an installed optional hook during an update without --with-hook.
+oldhook=.config/omarchy/hooks/theme-set.d/theme-report
+if ! $hook && [[ -f $receipt && -f $root/$oldhook ]]; then
+  h=$(sha256sum -- "$root/$oldhook"); h=${h%% *}
+  grep -Fqx -- "$h"$'\t'"$oldhook" "$receipt" && printf '%s\t%s\n' "$h" "$oldhook" >> "$tmp"
+fi
+for i in "${!paths[@]}"; do
+  target="$root/${paths[$i]}"
+  mkdir -p -- "$(dirname -- "$target")"
+  mode=644
+  [[ ${paths[$i]} == .local/bin/* || ${paths[$i]} == .config/omarchy/hooks/* ]] && mode=755
+  install -m "$mode" -- "${sources[$i]}" "$target"
+  h=$(sha256sum -- "$target"); h=${h%% *}
+  printf '%s\t%s\n' "$h" "${paths[$i]}" >> "$tmp"
+done
+mv -- "$tmp" "$receipt"
+echo "Installed project-owned files. Rescan: omarchy-shell shell rescanPlugins"
+echo "Then enable: omarchy plugin enable oldjobobo.theme-report"
