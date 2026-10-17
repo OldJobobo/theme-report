@@ -69,8 +69,10 @@ ShellRoot {
             verify(panel.categoryStatus({weight:20,id:"shell",state:"ready",lost:0})==="Passed","restored shell category is graded")
             var a=finding("pass");var b=finding("pass");b.category="shell"
             panel.report={themePath:"/fixture",theme:"test",grade:"A",state:"ready",capReasons:[],categories:[],findings:[a,b,finding("failure")]}
-            panel.selectedGroup="passed";panel.selectedCategory="readability"
-            verify(panel.number("passed")===2 && panel.number("passed","readability")===1 && panel.filteredFindings().length===1,"category filtering and counts")
+            verify(panel.number("passed")===2 && panel.number("passed","readability")===1 && panel.passedFor("readability").length===1 && panel.checksFor("readability").length===1 && panel.checksFor("readability")[0].severity==="failure","per-subject checks and counts")
+            verify(panel.categoryOpen("readability") && !panel.categoryOpen("shell"),"subjects with issues open on their own")
+            panel.toggleCategory("readability"); verify(!panel.categoryOpen("readability"),"subject collapses on request")
+            panel.togglePassed("shell"); verify(panel.passedOpen["shell"]===true,"passed checks unfold")
             panel.toggleDetail("readability.bar",false);panel.toggleDetail("readability.bar",true)
             var replacement=Object.assign({},panel.report);replacement.findings=[a,b]
             panel.report=replacement
@@ -79,24 +81,28 @@ ShellRoot {
             verify(!panel.expandedRules["readability.bar"] && !panel.technicalRules["readability.bar"],"detail reset on new theme")
             var paused=function(id){var f=finding("unassessed",{runtimeContract:"partial",reason:"Changed Style.qml"});f.ruleId=id;f.remediation="Update.";return f}
             panel.report={themePath:"/runtime",theme:"scooby-doo",grade:"A",state:"provisional",capReasons:[],categories:[],runtimeContract:{status:"partial",palette:true,unverified:["Style.qml control states"]},findings:[paused("readability.bar"),paused("shell.focus-fill"),finding("unassessed",{reason:"other"})]}
-            panel.selectedCategory="";panel.selectedGroup="unassessed"
-            var cards=panel.filteredFindings()
-            verify(cards.length===2 && cards[0].ruleId==="runtime.paused" && cards[0].remediation.indexOf("Status bar")>=0,"paused checks collapse into one card")
+            var cards=panel.checksFor("readability")
+            verify(cards.length===2 && cards[0].ruleId==="runtime.paused" && cards[0].remediation.indexOf("Status bar")>=0,"paused checks collapse into one row")
+            verify(panel.categorySummary({id:"readability",state:"limited"})==="3 not measured","not-measured subject summary counts every check")
             verify(panel.runtimePaused && namedItem(panel,"runtimeBanner").visible && namedItem(panel,"runtimeBanner").text.indexOf("Style.qml")>=0,"runtime banner")
             verify(panel.displayName("scooby-doo")==="Scooby Doo","title-cased theme name")
             var issue=finding("failure");issue.category="shell";issue.ruleId="shell.popup-border"
             var limited=finding("unassessed");limited.category="semantic";limited.ruleId="semantic.accent"
             var categoryReport={themePath:"/categories",theme:"categories",grade:"B",state:"ready",capReasons:[],categories:[],findings:[issue,limited,finding("pass")]}
             panel.report=categoryReport
-            panel.selectCategory("shell"); verify(panel.selectedCategory==="shell" && panel.selectedGroup==="issues","category opens its issues")
-            panel.selectCategory("semantic"); verify(panel.selectedGroup==="unassessed","category without issues opens limitations")
+            verify(panel.categoryOpen("shell") && !panel.categoryOpen("semantic"),"only subjects with issues start open")
+            verify(panel.categorySummary({id:"shell",state:"ready"})==="1 problem" && panel.categorySummary({id:"readability",state:"ready"})==="Its check passed","subject summaries")
+            panel.selectCategory("semantic"); verify(panel.selectedCategory==="semantic" && panel.categoryOpen("semantic"),"selecting a subject opens it")
             panel.selectCategory(""); verify(panel.selectedCategory==="","clearing the category")
             panel.report=null; panel.selectCategory("shell")
             panel.report=Object.assign({},categoryReport,{theme:"arrived"})
-            verify(panel.selectedCategory==="shell" && panel.selectedGroup==="issues" && panel.pendingCategory==="","category requested before the report survives its arrival")
+            verify(panel.selectedCategory==="shell" && panel.categoryOpen("shell") && panel.pendingCategory==="","category requested before the report survives its arrival")
+            var roles=finding("failure",{missingOrUnsupported:["background","accent"]});roles.ruleId="validity.roles";roles.summary="Foundational roles resolve"
+            verify(panel.shortReason(roles)==="Missing or unsupported: background, accent.","failing check never shows pass wording")
+            roles.evidence={};verify(panel.proof(roles)==="Foundational roles resolve","failing validity check falls back to its summary")
             panel.errorText="Analyzer error"; verify(namedItem(panel,"errorText").visible,"error shown in header"); panel.errorText=""
             verify(panel.safeColor("#aabbcc")==="#aabbcc" && String(panel.safeColor("red"))===String(panel.surface) && String(panel.safeColor("file:/etc/passwd"))===String(panel.surface),"safe swatches")
-            console.log("PASS: live theme palette/alpha/font, caution hue, quick-refresh stability, paused-check grouping/banner, header errors, category selection, overview palette banks/roles/copy,  passing exploration, positive proof, shared/suppressed honesty, category filters/counts, refresh retention/reset, safe color previews")
+            console.log("PASS: live theme palette/alpha/font, caution hue, quick-refresh stability, paused-check grouping/banner, header errors, subject cards/inline checks, category selection, failure wording, overview palette banks/roles/copy,  passing exploration, positive proof, shared/suppressed honesty, category filters/counts, refresh retention/reset, safe color previews")
         } catch (e) { console.error(String(e)) }
         Qt.callLater(function() { Qt.quit() })
     }

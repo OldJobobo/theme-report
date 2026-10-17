@@ -12,19 +12,23 @@ The badge shows the last result's letter, `*` when provisional, and `?` when the
 
 ## IPC
 
-`open`, `close`, `toggle` and `openCategory` act on the copy on the focused monitor. `openCategory` selects the category and its most useful tab, including when the panel opens before any result has loaded. A background `check` or `refresh` shows "Checking…" on every badge and hands the result to every copy. The method reference is in `docs/installation.md`.
+`open`, `close`, `toggle` and `openCategory` act on the copy on the focused monitor. `openCategory` opens that area's card, scrolls to it and outlines it, including when the panel opens before any result has loaded. A background `check` or `refresh` shows "Checking…" on every badge and hands the result to every copy. The method reference is in `docs/installation.md`.
 
 ## Overview
 
-The header shows the theme name (title-cased), a five-row grade card, and counts of problems, cautions and limitations. When some checks are paused because the installed Omarchy build changed a behavior this analyzer mirrors, a notice under the verdict names what changed. In the Limitations view, the paused checks collapse into a single card that lists them.
+The panel is laid out as a report card. The fixed header holds a grade stamp (colored by grade, `*` when provisional), the title-cased theme name, the verdict, and count chips for problems, cautions, checks not measured and passes. The last check time and the Refresh icon sit at the top right; the icon spins while a check runs. Analyzer errors and paused-check notices appear as callouts under the verdict, naming what changed in the installed Omarchy build.
 
-The color palette shows two ordered swatch banks for authored ANSI normal/bright colors and four resolved role chips (Base, Text, Accent, Urgent). Semantic-only themes show their named chromatic colors instead of invented ANSI slots. Hover or focus identifies a color; click or Enter copies its hex. This uses report evidence, never direct theme-file reads.
+Below it, each area gets a card: its letter grade, a score meter (the share of its budget it kept) and a one-line summary such as "3 problems · 1 not measured · 6 passed". Problem and caution counts carry their own colors. Hovering a card's header explains what the area covers.
+
+After the areas, the palette shows two ordered swatch banks for authored ANSI normal/bright colors and four resolved role chips (Base, Text, Accent, Urgent). Semantic-only themes show their named chromatic colors instead of invented ANSI slots. Hover or focus identifies a color; click or Enter copies its hex. This uses report evidence, never direct theme-file reads.
+
+A "How this grade works" row at the end holds the assumptions, foundational caps and analyzer, ruleset and Omarchy versions. When the content is taller than the panel, a scrollbar shows and the bottom edge fades, so a cut-off card reads as scrollable.
 
 ## Exploring findings
 
-Select a category to filter; a healthy category opens **Passed** automatically. Tab counts reflect the selected category. Issues lists failures first, then cautions, in registry order.
+Areas with a problem or caution start open; the rest start closed. Click an area (or Tab to it and press Enter) to open or close it. Inside, checks are listed in this order: problems, cautions, checks not measured, then notes, each in registry order. Passed checks fold into a single "N checks passed" row that opens on request. Checks paused for the same runtime reason collapse into one row that lists them.
 
-Expand a check for:
+Each check row shows a status glyph, its name and a one-line result (for example `1.37:1 contrast · target 4.5:1`). Click it for:
 
 - foreground/background previews and a contrast track marking the target (indicator and border checks show a boundary symbol rather than text);
 - normal versus selected/focused swatches and an OKLab separation track;
@@ -34,7 +38,7 @@ Expand a check for:
 
 Preview hex values are rounded; unrounded measurements decide grades. Track lengths encode contrast or separation, not scores. A wallpaper deficit already charged under Text & contrast appears in Notes, not as a pass.
 
-Expanded checks survive same-theme refreshes; a different theme resets exploration. Arrow and Page keys scroll; Escape closes. Category rows and check headers expose accessible names with their grade or state.
+Open areas and expanded checks survive same-theme refreshes; a different theme resets them. Arrow and Page keys scroll; Escape closes. Area headers and check rows expose accessible names with their grade, summary and open state.
 
 ## Colors
 
@@ -46,4 +50,4 @@ Schema v2. The panel reads optional evidence fields (`foreground`, `effectiveBac
 
 ## Tests
 
-`python3 tests/panel.py` runs `tests/qml/report-smoke.qml` against a sandboxed copy of the native `Ui/` and `Commons/` modules. It checks palette rebinding, popup alpha, fonts, filters and counts, honesty rules, refresh behavior, the caution hue, paused-check grouping and banner, and header errors, then lints the QML. `python3 tests/refresh.py` drives `Main.qml` with real Quickshell processes. It checks that nothing audits at startup or on file changes, exact helper invocation counts, manual Refresh, cancellation on close, the shared cached result, and the stale badge after a theme switch.
+`python3 tests/panel.py` runs `tests/qml/report-smoke.qml` against a sandboxed copy of the native `Ui/` and `Commons/` modules. It checks palette rebinding, popup alpha, fonts, per-area checks, counts and summaries, which areas open by default, failure wording, honesty rules, refresh behavior, the caution hue, paused-check grouping and banner, and header errors, then lints the QML. `python3 tests/refresh.py` drives `Main.qml` with real Quickshell processes. It checks that nothing audits at startup or on file changes, exact helper invocation counts, manual Refresh, cancellation on close, the shared cached result, and the stale badge after a theme switch.

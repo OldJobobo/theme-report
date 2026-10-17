@@ -9,6 +9,14 @@ Full IPC support on `oldjobobo.theme-report`.
 - New: `openCategory <id>`, `check` and `refresh` (a background re-check that updates every badge without opening the panel), `status` (JSON) and `grade` (badge text).
 - Every method answers with a string, and a busy check answers `busy` immediately.
 
+Report card redesign of the panel. No change to the report data or grading.
+
+- Each area is a card with its letter grade, a score meter and a one-line summary. Its checks are listed inline, so clicking an area no longer filters a list below the fold. Areas with problems or cautions open on their own, and passed checks fold into one row.
+- The Issues / Passed / Limitations / Notes tabs are gone. "Limitations" now reads "not measured".
+- The header has a grade stamp colored by grade, count chips, the last check time and a spinning Refresh icon. Errors and paused-check notices show as callouts.
+- The palette and "How this grade works" move below the grades. A scrollbar and a faded bottom edge show when there is more to scroll.
+- Fix: a failing integrity check (such as missing core colors) no longer shows the passing description. It names what is missing instead.
+
 ## 0.6.0
 
 Real-world coverage and reliability. Schema v2 and ruleset 5 scoring are unchanged; caches from older versions are ignored.

@@ -27,7 +27,7 @@ It does **not** judge taste, count optional files, or grade publishing polish. A
 
 The panel checks your theme when you open it. Use the Refresh icon (or press R) to force a fresh check. Nothing runs in the background unless you install the optional theme-switch hook.
 
-In the panel, pick a category to filter, then switch between **Issues**, **Passed**, **Limitations** and **Notes**. Expand any check to see color previews, contrast against its target, sampled wallpaper grids, the files and keys involved, and what to change.
+The panel reads like a report card: the overall grade and a tally of problems up top, then one card per area with its own grade. Areas that need work open on their own, with their problems listed right under the grade. Click any area to open or close it, and any check to see color previews, contrast against its target, sampled wallpaper grids, the files and keys involved, and what to change.
 
 ## Install
 
