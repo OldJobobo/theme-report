@@ -4,13 +4,15 @@ root=$HOME
 binary=""
 dry=false
 hook=false
+skill=false
 while (($#)); do
   case "$1" in
     --root) root=${2:?}; shift 2;;
     --binary) binary=${2:?}; shift 2;;
     --with-hook) hook=true; shift;;
+    --with-skill) skill=true; shift;;
     --dry-run) dry=true; shift;;
-    *) echo "Usage: install.sh [--root DIR] [--binary FILE] [--with-hook] [--dry-run]" >&2; exit 2;;
+    *) echo "Usage: install.sh [--root DIR] [--binary FILE] [--with-hook] [--with-skill] [--dry-run]" >&2; exit 2;;
   esac
 done
 repo=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd)
@@ -22,7 +24,27 @@ plugin=.config/omarchy/plugins/oldjobobo.theme-report
 receipt="$root/$plugin/.theme-report-owned"
 paths=(.local/bin/theme-report "$plugin/manifest.json" "$plugin/Main.qml" "$plugin/ReportPanel.qml")
 sources=("$binary" "$repo/plugin/manifest.json" "$repo/plugin/Main.qml" "$repo/plugin/ReportPanel.qml")
-if $hook; then paths+=(.config/omarchy/hooks/theme-set.d/theme-report); sources+=("$repo/hooks/theme-report"); fi
+hookrel=.config/omarchy/hooks/theme-set.d/theme-report
+if $hook; then paths+=("$hookrel"); sources+=("$repo/hooks/theme-report"); fi
+# The agent skill: one copy that prompts point at, plus one per agent skill folder
+# that already exists (the folders Omarchy links its own skills into).
+skillrels=(.local/share/theme-report/skills/theme-report/SKILL.md)
+for dir in .agents/skills .claude/skills .codex/skills .pi/agent/skills .gemini/config/skills .hermes/skills; do
+  skillrels+=("$dir/theme-report/SKILL.md")
+done
+if $skill; then
+  for rel in "${skillrels[@]}"; do
+    dir=${rel%/theme-report/SKILL.md}
+    if [[ $rel != .local/share/* ]]; then
+      [[ -d $root/$dir ]] || continue
+      linked=false
+      parent=$root/$dir
+      while [[ $parent != "$root" && $parent != / ]]; do [[ ! -L $parent ]] || linked=true; parent=$(dirname -- "$parent"); done
+      if $linked; then echo "Skipping linked skill folder: $root/$dir"; continue; fi
+    fi
+    paths+=("$rel"); sources+=("$repo/skills/theme-report/SKILL.md")
+  done
+fi
 # Check every target and its parent chain before making any changes.
 for rel in "${paths[@]}" "$plugin/.theme-report-owned"; do
   target="$root/$rel"
@@ -54,12 +76,13 @@ for i in "${!paths[@]}"; do
 done
 mv -- "$tmp" "$receipt"
 tmp=$(mktemp -- "${receipt}.XXXXXX")
-# Preserve ownership of an installed optional hook during an update without --with-hook.
-oldhook=.config/omarchy/hooks/theme-set.d/theme-report
-if ! $hook && [[ -f $root/$oldhook ]]; then
-  h=$(sha256sum -- "$root/$oldhook"); h=${h%% *}
-  if grep -Fqx -- "$h"$'\t'"$oldhook" "$receipt"; then printf '%s\t%s\n' "$h" "$oldhook" >> "$tmp"; fi
-fi
+# Keep ownership of installed optional files (hook, skill) during an update without their flag.
+for old in "$hookrel" "${skillrels[@]}"; do
+  printf '%s\n' "${paths[@]}" | grep -Fqx -- "$old" && continue
+  [[ -f $root/$old ]] || continue
+  h=$(sha256sum -- "$root/$old"); h=${h%% *}
+  if grep -Fqx -- "$h"$'\t'"$old" "$receipt"; then printf '%s\t%s\n' "$h" "$old" >> "$tmp"; fi
+done
 for i in "${!paths[@]}"; do
   target="$root/${paths[$i]}"
   mkdir -p -- "$(dirname -- "$target")"

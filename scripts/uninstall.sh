@@ -27,6 +27,7 @@ conflict=false
 for rel in "${order[@]}"; do
   case "$rel" in
     .local/bin/theme-report|.config/omarchy/plugins/oldjobobo.theme-report/manifest.json|.config/omarchy/plugins/oldjobobo.theme-report/Main.qml|.config/omarchy/plugins/oldjobobo.theme-report/ReportPanel.qml|.config/omarchy/hooks/theme-set.d/theme-report) ;;
+    .local/share/theme-report/skills/theme-report/SKILL.md|.agents/skills/theme-report/SKILL.md|.claude/skills/theme-report/SKILL.md|.codex/skills/theme-report/SKILL.md|.pi/agent/skills/theme-report/SKILL.md|.gemini/config/skills/theme-report/SKILL.md|.hermes/skills/theme-report/SKILL.md) ;;
     *) echo "Unrecognized receipt entry; refusing: $rel" >&2; conflict=true; continue;;
   esac
   target="$root/$rel"
@@ -41,7 +42,14 @@ for rel in "${order[@]}"; do
   actual=$(sha256sum -- "$target"); actual=${actual%% *}
   if [[ " ${owned[$rel]}" != *" $actual "* ]]; then echo "Leaving modified file: $target" >&2; conflict=true; continue; fi
   printf 'Remove: %s\n' "$target"
-  $dry || rm -- "$target"
+  if ! $dry; then
+    rm -- "$target"
+    # A skill lives in its own folder; remove the folder once it is empty.
+    if [[ $rel == */theme-report/SKILL.md ]]; then
+      rmdir -- "$(dirname -- "$target")" 2>/dev/null || true
+      [[ $rel == .local/share/* ]] && rmdir -- "$root/.local/share/theme-report/skills" "$root/.local/share/theme-report" 2>/dev/null || true
+    fi
+  fi
 done
 if $conflict; then exit 1; fi
 if ! $dry; then rm -- "$receipt"; rmdir -- "$plugin" 2>/dev/null || true; fi

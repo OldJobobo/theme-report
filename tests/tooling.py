@@ -68,6 +68,31 @@ with tempfile.TemporaryDirectory(dir=WORK) as temp:
     command("bash", "scripts/uninstall.sh", "--root", str(home))
     assert not panel.exists() and not receipt.exists()
 
+with tempfile.TemporaryDirectory(dir=WORK) as temp:
+    # The opt-in agent skill: one copy prompts cite, one per existing agent skill folder.
+    home = pathlib.Path(temp) / "skill"
+    (home / ".pi/agent/skills/other").mkdir(parents=True)
+    (home / ".pi/agent/skills/other/SKILL.md").write_text("someone else's")
+    elsewhere = pathlib.Path(temp) / "linked-skills"
+    elsewhere.mkdir()
+    (home / ".claude").mkdir()
+    (home / ".claude/skills").symlink_to(elsewhere)
+    install = ["bash", "scripts/install.sh", "--root", str(home), "--binary", str(BINARY)]
+    out = command(*install, "--with-skill").stdout
+    shipped = (ROOT / "skills/theme-report/SKILL.md").read_text()
+    canonical = home / ".local/share/theme-report/skills/theme-report/SKILL.md"
+    pi = home / ".pi/agent/skills/theme-report/SKILL.md"
+    assert canonical.read_text() == shipped and pi.read_text() == shipped
+    assert "Skipping linked skill folder" in out and not (elsewhere / "theme-report").exists()
+    assert not (home / ".codex").exists(), "Absent agent folders are not created"
+    receipt = home / ".config/omarchy/plugins/oldjobobo.theme-report/.theme-report-owned"
+    assert len(receipt.read_text().splitlines()) == 6
+    command(*install)  # An update without the flag keeps owning the skill.
+    assert len(receipt.read_text().splitlines()) == 6 and pi.exists()
+    command("bash", "scripts/uninstall.sh", "--root", str(home))
+    assert not pi.parent.exists() and not (home / ".local/share/theme-report").exists()
+    assert (home / ".pi/agent/skills/other/SKILL.md").read_text() == "someone else's"
+
 schema = json.loads((ROOT / "schema/report-v2.schema.json").read_text())
 jsonschema.Draft202012Validator.check_schema(schema)
 result = command(str(BINARY), "audit", "fixtures/themes/minimal", "--profile", "quattro-shell-2026-v1", "--format", "json", "--cache-dir", str(WORK / "cache"))
