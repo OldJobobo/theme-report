@@ -18,8 +18,10 @@ with tempfile.TemporaryDirectory(dir=WORK) as temp:
     for module in ("Commons", "Ui"):
         shutil.copytree(SHELL / module, base / module)
         (base / "qs" / module).symlink_to("../" + module)
-    shutil.copytree(ROOT / "plugin", base / "plugin")
-    smoke = (ROOT / "tests/qml/report-smoke.qml").read_text().replace('"../../plugin"', '"plugin"')
+    (base / "plugin").mkdir()
+    for name in ("manifest.json", "Main.qml", "ReportPanel.qml"):
+        shutil.copyfile(ROOT / name, base / "plugin" / name)
+    smoke = (ROOT / "tests/qml/report-smoke.qml").read_text().replace('import "../.." as Plugin', 'import "plugin" as Plugin')
     (base / "shell.qml").write_text(smoke)
     runtime = base / "run"
     runtime.mkdir(mode=0o700)

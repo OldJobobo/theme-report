@@ -16,14 +16,22 @@ while (($#)); do
   esac
 done
 repo=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd)
-binary=${binary:-$repo/target/release/theme-report}
+binary=${binary:-${CARGO_TARGET_DIR:-$repo/target}/release/theme-report}
 [[ -f $binary ]] || { echo "Build with cargo build --release --locked first." >&2; exit 1; }
 root=$(realpath -m -- "$root")
 [[ $root != *$'\n'* && $root != *$'\t'* ]] || { echo "Unsupported root name" >&2; exit 1; }
 plugin=.config/omarchy/plugins/oldjobobo.theme-report
 receipt="$root/$plugin/.theme-report-owned"
-paths=(.local/bin/theme-report "$plugin/manifest.json" "$plugin/Main.qml" "$plugin/ReportPanel.qml")
-sources=("$binary" "$repo/plugin/manifest.json" "$repo/plugin/Main.qml" "$repo/plugin/ReportPanel.qml")
+# Run from the plugin checkout that `omarchy plugin add` made, the plugin files are already
+# in place and belong to git; install only the analyzer (and the opt-in extras).
+checkout=false
+[[ $(realpath -m -- "$root/$plugin") == "$repo" ]] && checkout=true
+paths=(.local/bin/theme-report)
+sources=("$binary")
+if ! $checkout; then
+  paths+=("$plugin/manifest.json" "$plugin/Main.qml" "$plugin/ReportPanel.qml")
+  sources+=("$repo/manifest.json" "$repo/Main.qml" "$repo/ReportPanel.qml")
+fi
 hookrel=.config/omarchy/hooks/theme-set.d/theme-report
 if $hook; then paths+=("$hookrel"); sources+=("$repo/hooks/theme-report"); fi
 # The agent skill: one copy that prompts point at, plus one per agent skill folder
@@ -105,6 +113,8 @@ elif $updating; then
   echo "Updated project-owned files."
   # Replacing QML under a running shell can crash Quickshell; load it with a clean restart.
   echo "Load the new plugin code: omarchy restart shell"
+elif $checkout; then
+  echo "Installed the analyzer. Enable the widget if it is not already: omarchy plugin enable oldjobobo.theme-report"
 else
   echo "Installed project-owned files. Rescan: omarchy-shell shell rescanPlugins"
   echo "Then enable: omarchy plugin enable oldjobobo.theme-report"

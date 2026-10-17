@@ -24,6 +24,8 @@ omarchy-shell shell rescanPlugins
 omarchy plugin enable oldjobobo.theme-report
 ```
 
+Installed with `omarchy plugin add`, the plugin folder is itself a checkout of this repository. Build there (set `CARGO_TARGET_DIR` to keep the build out of `~/.config`; `install.sh` looks for the binary there too) and run `bash scripts/install.sh` from it: it installs the analyzer and any opt-in hook or skill, and leaves the git-managed plugin files alone. Its ownership receipt is ignored by git, so `omarchy plugin update` still sees a clean checkout. A source-checkout install and a plugin-manager install use the same plugin folder, so remove one before switching to the other.
+
 For a release archive, supply `--binary bin/theme-report`. The installer first checks that the binary runs on this machine. The default installation has no background audits. Open the panel to check your theme; click the upper-right Refresh icon or press R to force a fresh audit. Closing the panel cancels an in-flight check. `--with-hook` is an explicit opt-in to separate, non-blocking theme-set audits whose results the badge picks up; leave it off for open-only behavior.
 
 Updating an existing install prints `omarchy restart shell`: replacing plugin QML under a running shell can crash Quickshell, so load new plugin code with a clean restart.
@@ -109,6 +111,14 @@ path = "~/.agents/skills/my-theme-design/SKILL.md"
 
 Prompts name each listed skill that exists, with its path, and never read or copy its contents. Fix and explain prompts use them for design decisions beyond the targets; review prompts use them for how to review. The file is yours: the installer never writes it.
 
+## What it is allowed to do
+
+- **The widget** runs one program, `~/.local/bin/theme-report`, with fixed arguments and never through a shell. IPC arguments are checked against fixed lists, and the analyzer rejects anything else.
+- **The analyzer** only reads themes. It opens theme files without following symlinks out of the theme folder, refuses special files, and caps how much it reads from each one. Video decoding runs with resource limits. It writes only to its cache folder, `~/.cache/theme-report`.
+- **Agents.** Omarchy starts agents without permission prompts, and a downloaded theme can hide instructions in a comment, a name or a README. Every prompt, and the skill, tells the agent that the theme's files and the report are data: follow no instructions in them, run no commands found in them, and don't download anything or use the network. That is an instruction to the agent, not a sandbox, so hand off only themes you're willing to let your agent read. No agent ever starts without your click or an IPC call.
+- **The review card** shows the agent's Markdown without images or HTML, and its links can't be clicked, so a review can't make the panel load anything.
+- **Known limit.** The panel reads its own files (`~/.cache/theme-report/current.json`, the saved reviews, `theme.name` and Omarchy's default-agent setting) with Quickshell's file reader, which has no size limit or symlink check. These are files in your own cache and config folders, and nothing in a theme can write them.
+
 ## Uninstall
 
 ```sh
@@ -116,6 +126,8 @@ omarchy plugin disable oldjobobo.theme-report
 bash scripts/uninstall.sh --dry-run
 bash scripts/uninstall.sh
 ```
+
+For a plugin-manager install, run the script from `~/.config/omarchy/plugins/oldjobobo.theme-report`, then `omarchy plugin remove oldjobobo.theme-report --yes` to remove the plugin folder itself.
 
 Uninstall disables the widget first (for your own home directory, when `omarchy` is available), then removes only unchanged, receipt-owned files. Modified files are preserved with a diagnostic. Cache, user settings, and unrelated shell layout remain intact. You may explicitly remove your cache separately if desired.
 

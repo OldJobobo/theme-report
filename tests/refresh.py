@@ -118,7 +118,7 @@ Item {
     signal closeRequested()
 }
 ''')
-    shutil.copyfile(ROOT / "plugin/Main.qml", plugin / "Main.qml")
+    shutil.copyfile(ROOT / "Main.qml", plugin / "Main.qml")
     (base / "shell.qml").write_text('''import QtQuick
 import Quickshell
 import Quickshell.Io
@@ -294,7 +294,7 @@ ShellRoot {
     assert counts[counts.index("ipc") + 1:counts.index("ipc-panel")] == ["audit"], counts
     # Each handoff ran the analyzer once with exact arguments; none of them audited.
     assert (home / "agent-log").read_text().splitlines() == ["agent fix --window --rule readability.bar", "prompt explain", "prompt fix", "agent review --window"], (home / "agent-log").read_text()
-    main = (ROOT / "plugin/Main.qml").read_text()
+    main = (ROOT / "Main.qml").read_text()
     assert not any(token in main for token in
                    ["Component.onCompleted", "Timer", "queued", "freshnessExpiry"]), "Automatic audits must remain absent"
     # File views only display published results; they never start the analyzer.

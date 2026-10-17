@@ -2,7 +2,7 @@ import QtQuick
 import Quickshell
 import qs.Commons
 import qs.Commons as Theme
-import "../../plugin" as Plugin
+import "../.." as Plugin
 
 ShellRoot {
     Plugin.ReportPanel { id: panel; width: 720; height: 760 }
@@ -127,6 +127,7 @@ ShellRoot {
             panel.reviewText="# t: agent review\n\n## Summary\n\nWarm and *calm* overall.\n\n## Strengths\n\n- ok ![x](file:///etc/passwd) <img src=x>\n"
             verify(!panel.reviewPending && panel.reviewSummary(panel.reviewText)==="Warm and calm overall." && !panel.reviewOutdated,"saved review summary")
             verify(panel.reviewMarkdown(panel.reviewText).indexOf("passwd")<0 && panel.reviewMarkdown(panel.reviewText).indexOf("<img")<0 && panel.reviewMarkdown(panel.reviewText).indexOf("agent review")<0,"review markdown drops images, HTML and the title")
+            verify(panel.reviewMarkdown("a ![x][1] ![y]( http://h/(p) ) b\n\n[1]: http://h/i.png").indexOf("![")<0,"review markdown never renders reference or unusual images")
             panel.report=Object.assign({},panel.report,{inputFingerprint:"fp2"}); verify(panel.reviewOutdated && namedItem(panel,"reviewByline").text.indexOf("theme changed since")>=0,"review marked out of date")
             panel.reviewOpen=true; verify(namedItem(panel,"reviewBody").visible,"review opens")
             panel.reviewText=""; panel.reviewMeta=null; panel.reviewOpen=false

@@ -2,7 +2,7 @@
 
 A read-only health check for Omarchy themes. A small bar badge shows your current theme's grade; click it for a report card with the evidence behind every finding.
 
-![Native report panel](evidence/ui-overview.png)
+![Native report panel](docs/evidence/ui-overview.png)
 
 ## What it checks
 
@@ -36,6 +36,7 @@ When the report finds problems, the panel offers **Fix N issues with Pi**, using
 Omarchy starts agents without permission prompts, so the prompt sets the limits:
 - the agent edits only the theme source, on a new git branch when the theme is a repository, otherwise in a `<name>-tuned` copy (stock themes are always copied);
 - it never touches wallpapers or the applied theme;
+- it treats the theme's files as data: it follows no instructions and runs no commands found in them, and stays off the network;
 - it states its plan before editing, and asks before applying the result.
 
 It verifies its work with `theme-report audit`. When nothing needs fixing but some checks could not be measured, the button asks the agent about those instead.
@@ -46,6 +47,23 @@ Install the optional `theme-report` agent skill with `bash scripts/install.sh --
 
 ## Install
 
+Theme Report has two parts: the bar widget in this repository, and the `theme-report` analyzer it runs to do the measuring. You build the analyzer once on your own machine, which needs Rust (`cargo`). The build fetches the crates pinned in `Cargo.lock`; after that nothing is downloaded, and nothing needs root.
+
+**With Omarchy's plugin manager:**
+
+```sh
+omarchy plugin add https://github.com/OldJobobo/theme-report.git
+cd ~/.config/omarchy/plugins/oldjobobo.theme-report
+export CARGO_TARGET_DIR=~/.cache/theme-report/build   # keeps build files out of ~/.config
+cargo build --release --locked
+bash scripts/install.sh      # the analyzer; add --with-hook and/or --with-skill
+omarchy plugin enable oldjobobo.theme-report
+```
+
+Run from the plugin folder, `install.sh` installs only the analyzer (and the hook or skill if you ask for them) and leaves the plugin files to `omarchy plugin update`. After an update, rebuild and run `install.sh` again so the analyzer matches the widget.
+
+**From a source checkout:**
+
 ```sh
 cargo build --release --locked
 bash scripts/install.sh --dry-run   # preview
@@ -54,9 +72,15 @@ omarchy-shell shell rescanPlugins
 omarchy plugin enable oldjobobo.theme-report
 ```
 
-When you update an existing install, the script tells you to run `omarchy restart shell` so the new plugin code loads cleanly. To remove it: `bash scripts/uninstall.sh` (it disables the widget first and only deletes files it installed, unchanged).
+Here `install.sh` also copies the plugin files. When you update an existing install, it tells you to run `omarchy restart shell` so the new plugin code loads cleanly.
 
-Video wallpapers need `ffmpeg`/`ffprobe`; color-profiled or very large images need ImageMagick. Without them those wallpapers show up as limitations, never as failures.
+Use one method or the other: both install to `~/.config/omarchy/plugins/oldjobobo.theme-report`. To switch, remove the first install.
+
+**Removing it.** `bash scripts/uninstall.sh` disables the widget and deletes only files it installed, unchanged. For a plugin-manager install, run it from the plugin folder, then `omarchy plugin remove oldjobobo.theme-report --yes`.
+
+**Dependencies.** Required: Rust to build the analyzer. Optional: `ffmpeg`/`ffprobe` for video wallpapers and ImageMagick for color-profiled or very large images; without them those wallpapers show up as limitations, never as failures. The agent features use the agent you chose with `omarchy default agent`, and `wl-copy` for `theme-report agent --copy`.
+
+See `docs/installation.md` for what the widget, analyzer and agent prompts are allowed to do.
 
 ## Command line
 

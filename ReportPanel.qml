@@ -362,8 +362,10 @@ FocusScope {
         return {fix:"fix", measure:"measuring", explain:"explain", review:"review"}[kind] || ""
     }
     // Agent reviews are Markdown written by the agent: show text only, no images or HTML.
+    // The review file is agent-written. Drop the title and HTML, and never render an
+    // image: Markdown images (inline or by reference) would make the panel fetch a URL.
     function reviewMarkdown(text) {
-        return String(text).replace(/^#\s[^\n]*\n+/, "").replace(/!\[[^\]]*\]\([^)]*\)/g, "").replace(/<[^>]*>/g, "")
+        return String(text).replace(/^#\s[^\n]*\n+/, "").replace(/!\[[^\]]*\]\([^)]*\)/g, "").replace(/<[^>]*>/g, "").replace(/!\[/g, "[")
     }
     function reviewSummary(text) {
         var m = String(text).match(/##\s*Summary[^\n]*\n+([\s\S]*?)(\n#|$)/)

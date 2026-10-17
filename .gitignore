@@ -2,5 +2,6 @@
 /.build/
 /.testbed/
 /staging/
-/evidence/*.raw
+/docs/evidence/*.raw
 /dist/
+/.theme-report-owned

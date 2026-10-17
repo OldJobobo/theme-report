@@ -54,3 +54,5 @@ done
 if $conflict; then exit 1; fi
 if ! $dry; then rm -- "$receipt"; rmdir -- "$plugin" 2>/dev/null || true; fi
 echo "Cache and shell layout are preserved."
+# A marketplace install keeps its plugin files in a git checkout that Omarchy manages.
+if [[ -d $plugin/.git ]]; then echo "Remove the plugin itself: omarchy plugin remove $id --yes"; fi

@@ -93,6 +93,31 @@ with tempfile.TemporaryDirectory(dir=WORK) as temp:
     assert not pi.parent.exists() and not (home / ".local/share/theme-report").exists()
     assert (home / ".pi/agent/skills/other/SKILL.md").read_text() == "someone else's"
 
+with tempfile.TemporaryDirectory(dir=WORK) as temp:
+    # Installed with `omarchy plugin add`: the plugin folder is a git checkout of this
+    # repository. Its install.sh adds the analyzer and leaves the plugin files to git.
+    import shutil
+    home = pathlib.Path(temp) / "marketplace"
+    checkout = home / ".config/omarchy/plugins/oldjobobo.theme-report"
+    for rel in (".gitignore", "manifest.json", "Main.qml", "ReportPanel.qml", "scripts/install.sh",
+                "scripts/uninstall.sh", "hooks/theme-report", "skills/theme-report/SKILL.md"):
+        (checkout / rel).parent.mkdir(parents=True, exist_ok=True)
+        shutil.copy2(ROOT / rel, checkout / rel)
+    git = ["git", "-C", str(checkout), "-c", "user.name=t", "-c", "user.email=t@example.invalid"]
+    command(*git, "init", "-q")
+    command(*git, "add", "-A")
+    command(*git, "commit", "-qm", "checkout")
+    install = ["bash", str(checkout / "scripts/install.sh"), "--root", str(home), "--binary", str(BINARY), "--with-hook"]
+    command(*install)
+    command(*install)
+    assert (home / ".local/bin/theme-report").exists() and (home / ".config/omarchy/hooks/theme-set.d/theme-report").exists()
+    receipt = checkout / ".theme-report-owned"
+    assert len(receipt.read_text().splitlines()) == 2, "Only the analyzer and hook are owned"
+    assert command(*git, "status", "--porcelain").stdout == "", "The checkout stays clean for omarchy plugin update"
+    out = command("bash", str(checkout / "scripts/uninstall.sh"), "--root", str(home)).stdout
+    assert not (home / ".local/bin/theme-report").exists() and not receipt.exists()
+    assert (checkout / "Main.qml").exists() and "omarchy plugin remove oldjobobo.theme-report" in out
+
 schema = json.loads((ROOT / "schema/report-v2.schema.json").read_text())
 jsonschema.Draft202012Validator.check_schema(schema)
 result = command(str(BINARY), "audit", "fixtures/themes/minimal", "--profile", "quattro-shell-2026-v1", "--format", "json", "--cache-dir", str(WORK / "cache"))
@@ -118,7 +143,7 @@ with tempfile.TemporaryDirectory(dir=WORK) as temp:
 golden = {k: report[k] for k in ("rulesetVersion", "score", "grade", "state", "summary", "categories", "findings", "capReasons")}
 expected = json.loads((ROOT / "fixtures/reports/minimal.json").read_text())
 assert golden == expected, "Deterministic minimal report changed; review rules/version before updating the golden"
-main = (ROOT / "plugin/Main.qml").read_text()
+main = (ROOT / "Main.qml").read_text()
 assert "emergencySkin" not in main and "anchors.fill: badge" not in main, "The badge must inherit native bar styling"
 assert "foreground: root.barForeground" in main
-print("PASS: installer dry run/update/conflicts/uninstall; cache preservation; schema; deterministic golden; native badge styling")
+print("PASS: installer dry run/update/conflicts/uninstall; marketplace checkout; cache preservation; schema; deterministic golden; native badge styling")

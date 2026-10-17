@@ -379,6 +379,25 @@ fn kinds_select_their_findings() {
 }
 
 #[test]
+fn every_prompt_treats_theme_files_as_data() {
+    let t = tmp();
+    let e = env(t.path());
+    git_theme(&e, "demo");
+    let r = report(
+        "demo",
+        vec![selection_failure(), lock_caution(), unmeasured()],
+    );
+    for kind in [Kind::Fix, Kind::Measure, Kind::Explain, Kind::Review] {
+        let text = build(&r, kind, None, &e).unwrap().text;
+        let rules = text.find("Rules for this session:").expect("rules section");
+        assert!(
+            text[rules..].contains(agent::UNTRUSTED_RULE.trim_end()),
+            "{kind:?}: {text}"
+        );
+    }
+}
+
+#[test]
 fn handoff_files_are_private_and_pruned() {
     let t = tmp();
     let e = env(t.path());
