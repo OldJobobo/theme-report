@@ -10,13 +10,12 @@ name="theme-report-$version-linux-$(uname -m)"
 mkdir -p dist .testbed
 work=$(mktemp -d "$root/.testbed/package.XXXXXX")
 trap 'rm -rf -- "$work"' EXIT
-mkdir -p "$work/$name/bin" "$work/$name/scripts" "$work/$name/docs/evidence"
+mkdir -p "$work/$name/bin" "$work/$name/scripts" "$work/$name/docs"
 cp target/release/theme-report "$work/$name/bin/"
 cp scripts/{install,uninstall}.sh "$work/$name/scripts/"
 cp -r hooks rules schema skills "$work/$name/"
-# The docs without the development evidence; the README image is copied below.
 find docs -maxdepth 1 -type f -exec cp -t "$work/$name/docs/" {} +
-cp manifest.json Main.qml ReportPanel.qml LICENSE README.md "$work/$name/"
+cp manifest.json Main.qml ReportPanel.qml preview.png LICENSE README.md "$work/$name/"
 host=$(rustc -vV | awk '/^host:/ { print $2 }')
 cargo metadata --format-version 1 --locked --filter-platform "$host" > "$work/metadata.json"
 python3 - "$work/metadata.json" "$work/$name" <<'PY'
@@ -41,7 +40,6 @@ PY
 sysroot=$(rustc --print sysroot)
 cp -r "$sysroot/share/doc/rust/licenses" "$work/$name/licenses/rust-toolchain"
 cp "$sysroot/share/doc/rust/COPYRIGHT-library.html" "$work/$name/licenses/"
-cp docs/evidence/ui-overview.png "$work/$name/docs/evidence/"
 printf 'Install preview: bash scripts/install.sh --binary bin/theme-report --dry-run\nInstall with optional hook: bash scripts/install.sh --binary bin/theme-report --with-hook\nThen: omarchy-shell shell rescanPlugins; omarchy plugin enable oldjobobo.theme-report\n' > "$work/$name/RELEASE.txt"
 tar --sort=name --mtime=@0 --owner=0 --group=0 --numeric-owner -czf "dist/$name.tar.gz" -C "$work" "$name"
 sha256sum "dist/$name.tar.gz" > "dist/$name.tar.gz.sha256"

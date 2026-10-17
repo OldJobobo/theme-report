@@ -2,7 +2,7 @@
 
 A read-only health check for Omarchy themes. A small bar badge shows your current theme's grade; click it for a report card with the evidence behind every finding.
 
-![Native report panel](docs/evidence/ui-overview.png)
+![The Theme Report panel](preview.png)
 
 ## What it checks
 

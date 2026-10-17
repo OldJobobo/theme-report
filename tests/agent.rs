@@ -493,7 +493,6 @@ fn shipped_text_avoids_private_terms() {
     for file in [
         "skills/theme-report/SKILL.md",
         "src/agent.rs",
-        "docs/agent-integration-plan.md",
         "README.md",
         "docs/installation.md",
         "docs/report-ui.md",

@@ -4,11 +4,11 @@
 
 Ready for the Omarchy plugin marketplace.
 
-- **Layout.** `manifest.json`, `Main.qml` and `ReportPanel.qml` now live at the repository root, so `omarchy plugin add` can install the repository directly. Development evidence moved to `docs/evidence/`, and the VM test helpers to `tests/vm/`.
+- **Layout.** `manifest.json`, `Main.qml` and `ReportPanel.qml` now live at the repository root, so `omarchy plugin add` can install the repository directly. Development records (plans, verification logs, evidence and the VM test helpers) moved out of the repository. The README and marketplace card use a current screenshot, `preview.png`.
 - **Plugin-manager installs.** Run from the plugin folder, `install.sh` installs only the analyzer (plus any opt-in hook or skill) and leaves the git-managed plugin files alone. It also finds a build in `CARGO_TARGET_DIR`. The README lists the dependencies and both install and removal paths.
 - **Agent safety.** Every prompt and the skill now say that the theme's files and the report are data: the agent follows no instructions in them, runs no commands found in them, and stays off the network.
 - **Review card.** No Markdown image renders, including reference-style ones, so a review can't make the panel load a URL.
-- **Release archive.** Now includes the agent skill and leaves out the development evidence.
+- **Release archive.** Now includes the agent skill.
 
 ## 0.8.0
 
