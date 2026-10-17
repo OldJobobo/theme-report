@@ -57,6 +57,34 @@ The report follows the live theme's popup background/text, authored transparency
 
 Click a category to filter findings. Issues, Limitations, and Notes are separate views. Expand a finding with click or keyboard Tab + Enter for remediation, source references, and measurement evidence. Method & limits contains assumptions and foundational cap details. Arrow/Page keys scroll; Escape closes. Refresh is the only report-level action; palette color copying and per-finding technical evidence remain available.
 
+## IPC
+
+The widget answers on the IPC target `oldjobobo.theme-report`, through `omarchy-shell` (or `qs ipc call`):
+
+```sh
+omarchy-shell oldjobobo.theme-report toggle
+omarchy-shell oldjobobo.theme-report openCategory readability
+omarchy-shell oldjobobo.theme-report check
+omarchy-shell oldjobobo.theme-report status | jq .
+```
+
+| Method | Answer | Effect |
+| --- | --- | --- |
+| `open`, `show` | `opened` | Open the panel on the focused monitor (opening checks the theme, as a click does) |
+| `close`, `hide` | `closed` | Close the panel on whichever monitor shows it |
+| `toggle` | `opened` / `closed` | Either of the above |
+| `openCategory <id>` | `ok` / `unknown` | Open filtered to `validity`, `readability`, `semantic`, `shell` or `wallpaper`, on its most useful tab |
+| `check` | `started` / `busy` | Check the current theme now; unchanged inputs reuse the cache. An open panel re-checks in place; otherwise nothing opens and every badge updates |
+| `refresh` | `started` / `busy` | Like `check`, but always a full re-audit |
+| `status` | JSON | Last result, described below |
+| `grade` | badge text | `B`, `B*`, `~B` or `?` |
+
+`status` returns `theme`, `activeTheme`, `badge`, `grade`, `state` (`ready`, `provisional`, `not-graded` or `not-audited`), `stale`, `summary`, `problems`, `cautions`, `limitations`, `runtime` (the runtime contract status), `checkedAt` (Unix seconds), `analyzerVersion`, `checking`, `open`, and `error` (the open panel's or the last background check's error, otherwise `null`). `check` and `refresh` return immediately; poll `status` until `checking` is false to read the outcome.
+
+The bar creates one widget copy per monitor. Exactly one copy (the first the bar lists) owns the target, so calls are never split between copies, and ownership moves if that copy goes away. `open`, `toggle` and `openCategory` use the shell's own focused-monitor routing (`omarchy-shell shell toggle oldjobobo.theme-report` reaches the same place). The target exists only while the widget is on a bar. `check` and `refresh` are explicit requests: the widget still never audits by itself in the background.
+
+To bind a key, run the command from your Hyprland binding, for example `omarchy-shell oldjobobo.theme-report toggle`.
+
 ## Uninstall
 
 ```sh

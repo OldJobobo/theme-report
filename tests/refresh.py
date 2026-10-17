@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Verify open-only audits, manual refresh, cancellation, shared cached results and stale badges."""
+"""Verify open-only audits, manual refresh, cancellation, shared cached results, stale badges and IPC."""
 import os
 import pathlib
 import shutil
@@ -49,15 +49,19 @@ print(json.dumps(report))
     commons.mkdir()
     plugin.mkdir()
     (ui / "qmldir").write_text("module qs.Ui\nPanel 1.0 Panel.qml\nWidgetButton 1.0 WidgetButton.qml\nKeyboardPanel 1.0 KeyboardPanel.qml\n")
-    (commons / "qmldir").write_text("module qs.Commons\nsingleton Style 1.0 Style.qml\n")
+    (commons / "qmldir").write_text("module qs.Commons\nsingleton Style 1.0 Style.qml\nShellIpc 1.0 ShellIpc.qml\n")
+    (commons / "ShellIpc.qml").write_text("import Quickshell.Io\nIpcHandler { }\n")
     (commons / "Style.qml").write_text("pragma Singleton\nimport QtQuick\nQtObject { function space(n) { return n } }\n")
     (ui / "Panel.qml").write_text('''import QtQuick
 Item {
     property string moduleName
     property string ipcTarget
+    property bool manageIpc: true
+    property var settings: ({})
     property bool opened: false
     property var bar: null
     property color barForeground: "white"
+    function open() { opened = true }
     function toggle() { opened = !opened }
     function close() { opened = false }
 }
@@ -90,6 +94,9 @@ Item {
     property string status
     property string errorText
     property bool refreshing
+    objectName: "reportStub"
+    property string category: ""
+    function selectCategory(id) { category = id }
     signal refreshRequested()
     signal closeRequested()
 }
@@ -109,6 +116,25 @@ ShellRoot {
         return condition
     }
     Process { id: mutation; command: [Quickshell.env("HOME") + "/.local/bin/theme-report", "change-inputs"] }
+    // A bar listing both copies; its shell routes summon to the second (the "focused monitor").
+    QtObject {
+        id: fakeBar
+        property var widgets: []
+        property QtObject shell: QtObject {
+            function summon(id, payload) { if (id !== "oldjobobo.theme-report") return false; second.open(); return true }
+        }
+        function moduleWidgets(id) { return id === "oldjobobo.theme-report" ? widgets : [] }
+    }
+    function namedItem(item, name) {
+        if (item.objectName === name) return item
+        for (var i = 0; i < item.children.length; i++) {
+            var found = namedItem(item.children[i], name)
+            if (found) return found
+        }
+        return null
+    }
+    Process { id: mark; command: ["sh", "-c", "echo $1 >> $HOME/audit-count", "sh", "ipc"] }
+    Process { id: hideHelper; command: ["sh", "-c", "mv $HOME/.local/bin/theme-report $HOME/.local/bin/theme-report.off"] }
     Process { id: switchTheme; command: ["sh", "-c", "printf other > $HOME/.local/state/omarchy/current/theme.name"] }
     Timer {
         interval: 700; running: true; repeat: true
@@ -153,9 +179,46 @@ ShellRoot {
                 if (!verify(!first.stale && !second.stale, "matching theme is not stale")) return
                 switchTheme.running = true
                 stage++
-            } else {
+            } else if (stage === 8) {
                 if (!verify(first.stale && second.stale && first.report === retained, "theme switch marks the badge stale without auditing")) return
-                console.log("PASS: startup idle, open-only audits, explicit Refresh, shared cached result, stale badge, no queued work, close cancellation")
+                if (!verify(!first.ipcOwner && !second.ipcOwner, "no IPC owner before the bar places the widget")) return
+                fakeBar.widgets = [first, second]
+                first.bar = fakeBar
+                second.bar = fakeBar
+                mark.running = true
+                stage++
+            } else if (stage === 9) {
+                if (!verify(first.ipcOwner && !second.ipcOwner, "exactly one copy owns the IPC target")) return
+                var st = JSON.parse(first.statusJson())
+                if (!verify(st.grade === "A" && st.badge === "~A" && st.stale === true && st.open === false && st.checking === false && st.theme === "fixture" && st.activeTheme === "other", "status JSON")) return
+                if (!verify(first.badgeFor(first.latestReport()) === "~A", "grade answer")) return
+                var firstCheck = first.startCheck(false), secondCheck = first.startCheck(true)
+                if (!verify(firstCheck === "started" && secondCheck === "busy", "background check and busy answer")) return
+                if (!verify(second.sharedChecking && second.checking, "every badge shows a background check")) return
+                stage++
+            } else if (stage === 10) {
+                if (!verify(!first.checking && !second.checking && first.report !== retained && second.report === first.report && !first.opened && !second.opened, "background check updates every badge without opening")) return
+                mark.command = ["sh", "-c", "echo $1 >> $HOME/audit-count", "sh", "ipc-panel"]
+                mark.running = true
+                if (!verify(first.togglePanel() === "opened" && second.opened && !first.opened, "toggle opens on the focused copy")) return
+                if (!verify(JSON.parse(first.statusJson()).open === true, "status reports the open panel")) return
+                if (!verify(first.togglePanel() === "closed" && !second.opened, "toggle closes wherever the panel is open")) return
+                if (!verify(first.openCategory("bogus") === "unknown" && !second.opened, "unknown category is rejected")) return
+                if (!verify(first.openCategory("shell") === "ok" && second.opened && namedItem(second, "reportStub").category === "shell", "openCategory opens the focused copy on that category")) return
+                first.hidePanel()
+                if (!verify(!second.opened, "close acts on the open copy")) return
+                fakeBar.widgets = [second, first]
+                first.electAll()
+                if (!verify(second.ipcOwner && !first.ipcOwner, "ownership follows the bar's order")) return
+                hideHelper.running = true
+                stage++
+            } else if (stage === 11) {
+                if (!verify(second.startCheck(false) === "started", "check without the analyzer starts")) return
+                stage++
+            } else if (stage === 12) {
+                var failed = JSON.parse(second.statusJson())
+                if (!verify(!second.checking && !first.checking && failed.checking === false && String(failed.error).indexOf("Could not start") === 0, "missing analyzer clears busy and reports an error")) return
+                console.log("PASS: startup idle, open-only audits, explicit Refresh, shared cached result, stale badge, no queued work, close cancellation, IPC ownership/routing/status/check")
                 Qt.quit()
             }
         }
@@ -174,11 +237,14 @@ ShellRoot {
                             capture_output=True, timeout=10)
     output = result.stdout + result.stderr
     assert result.returncode == 0 and "PASS: startup" in output and "FAIL:" not in output, output
-    assert (home / "audit-count").read_text().splitlines() == ["audit"] * 4, output
+    counts = (home / "audit-count").read_text().splitlines()
+    # Exactly four panel audits before IPC, then exactly one background check (the busy call starts nothing).
+    assert counts[:counts.index("ipc")] == ["audit"] * 4, output
+    assert counts[counts.index("ipc") + 1:counts.index("ipc-panel")] == ["audit"], counts
     main = (ROOT / "plugin/Main.qml").read_text()
     assert not any(token in main for token in
                    ["Component.onCompleted", "Timer", "queued", "freshnessExpiry"]), "Automatic audits must remain absent"
     # File views only display published results; they never start the analyzer.
     for block in main.split("FileView {")[1:]:
         assert "request(" not in block.split("\n    }")[0] and "running = true" not in block.split("\n    }")[0]
-    print("PASS: open-only audit regression (real Process, two widgets, exact invocation count, cancellation)")
+    print("PASS: open-only audit regression and IPC (real Process, two widgets, exact invocation counts, cancellation, single IPC owner, focused routing)")

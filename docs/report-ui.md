@@ -10,6 +10,10 @@ A check that finishes quickly (usually a cache hit) shows no transition. If one 
 
 The badge shows the last result's letter, `*` when provisional, and `?` when there is none. At startup it reads the last published result from the cache, which is a file read, not an audit. It also picks up results written by the optional theme-switch hook. When `theme.name` no longer matches the result's theme, the badge shows `~` before the letter and the tooltip names the previous theme.
 
+## IPC
+
+`open`, `close`, `toggle` and `openCategory` act on the copy on the focused monitor. `openCategory` selects the category and its most useful tab, including when the panel opens before any result has loaded. A background `check` or `refresh` shows "Checking…" on every badge and hands the result to every copy. The method reference is in `docs/installation.md`.
+
 ## Overview
 
 The header shows the theme name (title-cased), a five-row grade card, and counts of problems, cautions and limitations. When some checks are paused because the installed Omarchy build changed a behavior this analyzer mirrors, a notice under the verdict names what changed. In the Limitations view, the paused checks collapse into a single card that lists them.

@@ -54,6 +54,19 @@ theme-report explain readability.bar
 theme-report rules
 ```
 
+## Keyboard and scripts
+
+The widget answers IPC on `oldjobobo.theme-report`, so you can bind keys or script it:
+
+```sh
+omarchy-shell oldjobobo.theme-report toggle            # open/close on the focused monitor
+omarchy-shell oldjobobo.theme-report openCategory readability
+omarchy-shell oldjobobo.theme-report check             # re-check without opening the panel
+omarchy-shell oldjobobo.theme-report status            # JSON: grade, state, counts, checking...
+```
+
+Also `open`, `close`, `refresh` and `grade`. See `docs/installation.md` for the full reference.
+
 ## When Omarchy updates
 
 Theme Report mirrors a few pieces of Omarchy's runtime: how `colors.toml` loads, the default surface and control colors, and terminal selection fallbacks. It verifies each piece separately, so unrelated Omarchy changes do not affect it. If a piece it relies on changes, only the checks that depend on it pause, and the panel says so. It never guesses a grade. Run `theme-report runtime` to see what is verified.

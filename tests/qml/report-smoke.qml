@@ -84,9 +84,19 @@ ShellRoot {
             verify(cards.length===2 && cards[0].ruleId==="runtime.paused" && cards[0].remediation.indexOf("Status bar")>=0,"paused checks collapse into one card")
             verify(panel.runtimePaused && namedItem(panel,"runtimeBanner").visible && namedItem(panel,"runtimeBanner").text.indexOf("Style.qml")>=0,"runtime banner")
             verify(panel.displayName("scooby-doo")==="Scooby Doo","title-cased theme name")
+            var issue=finding("failure");issue.category="shell";issue.ruleId="shell.popup-border"
+            var limited=finding("unassessed");limited.category="semantic";limited.ruleId="semantic.accent"
+            var categoryReport={themePath:"/categories",theme:"categories",grade:"B",state:"ready",capReasons:[],categories:[],findings:[issue,limited,finding("pass")]}
+            panel.report=categoryReport
+            panel.selectCategory("shell"); verify(panel.selectedCategory==="shell" && panel.selectedGroup==="issues","category opens its issues")
+            panel.selectCategory("semantic"); verify(panel.selectedGroup==="unassessed","category without issues opens limitations")
+            panel.selectCategory(""); verify(panel.selectedCategory==="","clearing the category")
+            panel.report=null; panel.selectCategory("shell")
+            panel.report=Object.assign({},categoryReport,{theme:"arrived"})
+            verify(panel.selectedCategory==="shell" && panel.selectedGroup==="issues" && panel.pendingCategory==="","category requested before the report survives its arrival")
             panel.errorText="Analyzer error"; verify(namedItem(panel,"errorText").visible,"error shown in header"); panel.errorText=""
             verify(panel.safeColor("#aabbcc")==="#aabbcc" && String(panel.safeColor("red"))===String(panel.surface) && String(panel.safeColor("file:/etc/passwd"))===String(panel.surface),"safe swatches")
-            console.log("PASS: live theme palette/alpha/font, caution hue, quick-refresh stability, paused-check grouping/banner, header errors, overview palette banks/roles/copy,  passing exploration, positive proof, shared/suppressed honesty, category filters/counts, refresh retention/reset, safe color previews")
+            console.log("PASS: live theme palette/alpha/font, caution hue, quick-refresh stability, paused-check grouping/banner, header errors, category selection, overview palette banks/roles/copy,  passing exploration, positive proof, shared/suppressed honesty, category filters/counts, refresh retention/reset, safe color previews")
         } catch (e) { console.error(String(e)) }
         Qt.callLater(function() { Qt.quit() })
     }

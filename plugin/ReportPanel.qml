@@ -19,6 +19,7 @@ FocusScope {
     property string viewedTarget: ""
     property string copiedPaletteColor: ""
     property string focusedPaletteColor: ""
+    property string pendingCategory: ""
     readonly property var paletteEvidence: report && Array.isArray(report.findings) ? report.findings.find(function(f) { return f.ruleId === "validity.roles" }) : null
     readonly property var paletteColors: paletteEvidence && paletteEvidence.evidence ? paletteEvidence.evidence.paletteColors || paletteEvidence.evidence.resolvedColors || ({}) : ({})
     readonly property var paletteBanks: paletteRows()
@@ -158,6 +159,16 @@ FocusScope {
         var shared = f.evidence && f.evidence.referenceDefectOwnedByReadability
         return group === "issues" ? !f.policySuppressed && (f.severity === "failure" || f.severity === "caution") : group === "passed" ? !f.policySuppressed && f.severity === "pass" && !shared : group === "unassessed" ? f.severity === "unassessed" || f.policySuppressed : f.severity === "advisory" || shared
     }
+    // Filter to a category and open its most useful view: issues, then limitations, then passes.
+    function selectCategory(id) {
+        selectedCategory = id || ""
+        showMethod = false
+        // Requested before any report arrived (openCategory over IPC): apply it once one does.
+        pendingCategory = report ? "" : selectedCategory
+        if (!selectedCategory || !report) return
+        var fs = report.findings.filter(function(f) { return f.category === selectedCategory })
+        selectedGroup = fs.some(function(f) { return belongs(f, "issues") }) ? "issues" : fs.some(function(f) { return belongs(f, "unassessed") }) ? "unassessed" : fs.some(function(f) { return belongs(f, "passed") }) ? "passed" : "notes"
+    }
     function toggleDetail(ruleId, technical) {
         var copy = Object.assign({}, technical ? technicalRules : expandedRules)
         copy[ruleId] = !copy[ruleId]
@@ -290,6 +301,7 @@ FocusScope {
             focusedPaletteColor = ""
             paletteCopyExpiry.stop()
         }
+        if (report && pendingCategory) selectCategory(pendingCategory)
     }
     Keys.onPressed: function(event) {
         if (event.key === Qt.Key_Escape) { root.closeRequested(); event.accepted = true }
@@ -432,13 +444,7 @@ FocusScope {
                         selected: root.selectedCategory === modelData.id
                         Accessible.name: root.categoryName(modelData.id) + ", grade " + (modelData.grade || "not checked") + ", " + root.categoryStatus(modelData)
                         onActiveFocusChanged: if (activeFocus) root.reveal(this)
-                        onClicked: {
-                            root.selectedCategory = root.selectedCategory === modelData.id ? "" : modelData.id
-                            if (root.selectedCategory) {
-                                var fs = root.report.findings.filter(function(f) { return f.category === root.selectedCategory })
-                                root.selectedGroup = fs.some(function(f) { return root.belongs(f, "issues") }) ? "issues" : fs.some(function(f) { return root.belongs(f, "unassessed") }) ? "unassessed" : fs.some(function(f) { return root.belongs(f, "passed") }) ? "passed" : "notes"
-                            }
-                        }
+                        onClicked: root.selectCategory(root.selectedCategory === modelData.id ? "" : modelData.id)
                         Row {
                             anchors.fill: parent; anchors.margins: Style.space(9); spacing: Style.space(10)
                             Rectangle {

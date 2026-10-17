@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.7.0
+
+Full IPC support on `oldjobobo.theme-report`.
+
+- One widget copy owns the target instead of every monitor's copy claiming it. That removes the duplicate-handler warnings, and calls always reach a live copy.
+- `open`/`show`, `close`/`hide` and `toggle` act on the focused monitor through the shell's own routing, and close the panel wherever it is shown.
+- New: `openCategory <id>`, `check` and `refresh` (a background re-check that updates every badge without opening the panel), `status` (JSON) and `grade` (badge text).
+- Every method answers with a string, and a busy check answers `busy` immediately.
+
 ## 0.6.0
 
 Real-world coverage and reliability. Schema v2 and ruleset 5 scoring are unchanged; caches from older versions are ignored.
