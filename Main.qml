@@ -31,6 +31,7 @@ Panel {
     readonly property string home: Quickshell.env("HOME")
     readonly property string cacheHome: Quickshell.env("XDG_CACHE_HOME") || home + "/.cache"
     readonly property string analyzer: home + "/.local/bin/theme-report"
+    readonly property string missingAnalyzer: "The Theme Report analyzer is not installed. In a terminal, run:\nbash ~/.config/omarchy/plugins/oldjobobo.theme-report/scripts/install.sh"
     // The active theme is no longer the one the shown result describes.
     readonly property bool stale: isStale(report)
     readonly property string status: audit.running ? "Updating" : error ? "Analyzer error" : report ? (report.grade ? report.grade + (report.state === "provisional" ? " · Provisional" : "") : "Not graded") : "Not audited"
@@ -72,7 +73,7 @@ Panel {
         stderr: StdioCollector { waitForEnd: true; onStreamFinished: root.diagnostic = text }
         onRunningChanged: if (!running) Qt.callLater(function() {
             if (root.opened && !audit.running && !root.output) {
-                root.error = "Could not start the analyzer. Check ~/.local/bin/theme-report and refresh."
+                root.error = root.missingAnalyzer
             }
         })
         onExited: function(exitCode, exitStatus) {
@@ -215,7 +216,7 @@ Panel {
         // A process that cannot start reports only running=false, never exited.
         onRunningChanged: if (!running) Qt.callLater(function() {
             if (!root.headlessActive || headless.running) return
-            if (!root.headlessOutput && !root.headlessError) root.headlessError = "Could not start the analyzer. Check ~/.local/bin/theme-report."
+            if (!root.headlessOutput && !root.headlessError) root.headlessError = root.missingAnalyzer
             root.setHeadlessActive(false)
         })
         onExited: function(exitCode, exitStatus) {
@@ -290,7 +291,7 @@ Panel {
         agentBusy = false
         var out = agentOutput.trim()
         if (agentExit !== 0 || !out) {
-            agentMessage = agentExit < 0 && !agentError ? "Could not start the analyzer. Check ~/.local/bin/theme-report." : (agentError.trim().replace(/^Theme Report: /, "") || "Could not prepare the prompt.")
+            agentMessage = agentExit < 0 && !agentError ? missingAnalyzer : (agentError.trim().replace(/^Theme Report: /, "") || "Could not prepare the prompt.")
         } else if (agentMode === "copy") {
             Quickshell.clipboardText = agentOutput
             agentMessage = "Prompt copied"

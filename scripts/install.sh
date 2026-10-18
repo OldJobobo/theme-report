@@ -1,25 +1,94 @@
 #!/usr/bin/env bash
+# Installs the Theme Report analyzer (and, outside a plugin-manager checkout, the widget).
+# With no options it uses, in order: the binary bundled in a release archive, a matching
+# local cargo build, or the matching release from GitHub, checksum-verified.
 set -euo pipefail
 root=$HOME
 binary=""
+build=false
 dry=false
 hook=false
 skill=false
+usage() {
+  cat <<'USAGE'
+Usage: install.sh [options]
+
+  --with-hook     re-check the theme in the background after every theme switch
+  --with-skill    install the theme-report agent skill for your coding agents
+  --build         build the analyzer from source with Rust instead of downloading it
+  --binary FILE   install this analyzer binary
+  --dry-run       show what would be installed, change nothing
+  --root DIR      install into DIR instead of your home folder (for testing)
+USAGE
+}
 while (($#)); do
   case "$1" in
     --root) root=${2:?}; shift 2;;
     --binary) binary=${2:?}; shift 2;;
+    --build) build=true; shift;;
     --with-hook) hook=true; shift;;
     --with-skill) skill=true; shift;;
     --dry-run) dry=true; shift;;
-    *) echo "Usage: install.sh [--root DIR] [--binary FILE] [--with-hook] [--with-skill] [--dry-run]" >&2; exit 2;;
+    -h|--help) usage; exit 0;;
+    *) usage >&2; exit 2;;
   esac
 done
 repo=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd)
-# A release archive ships its prebuilt analyzer in bin/; a checkout uses its cargo build.
-if [[ -z $binary && -f $repo/bin/theme-report ]]; then binary=$repo/bin/theme-report; fi
-binary=${binary:-${CARGO_TARGET_DIR:-$repo/target}/release/theme-report}
-[[ -f $binary ]] || { echo "Build with cargo build --release --locked first." >&2; exit 1; }
+version=$(sed -n 's/^ *"version": *"\([^"]*\)".*/\1/p' "$repo/manifest.json" | head -n 1)
+[[ $version =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]] || { echo "Cannot read the plugin version from $repo/manifest.json" >&2; exit 1; }
+cleanup=()
+trap 'rm -rf -- "${cleanup[@]}"' EXIT
+matches() { [[ $("$1" version 2>/dev/null) == "theme-report $version "* ]]; }
+download=false
+if [[ -n $binary ]]; then
+  :
+elif $build; then
+  command -v cargo >/dev/null || { echo "--build needs Rust. Install the rust package, then run this again." >&2; exit 1; }
+  # Build outside the plugin folder so build files stay out of ~/.config.
+  export CARGO_TARGET_DIR=${CARGO_TARGET_DIR:-$HOME/.cache/theme-report/build}
+  if $dry; then
+    echo "Would build theme-report $version with cargo into $CARGO_TARGET_DIR"
+  else
+    echo "Building theme-report $version (this takes a few minutes)..."
+    cargo build --release --locked --manifest-path "$repo/Cargo.toml"
+  fi
+  binary=$CARGO_TARGET_DIR/release/theme-report
+elif [[ -f $repo/bin/theme-report ]]; then
+  binary=$repo/bin/theme-report
+elif local_build=${CARGO_TARGET_DIR:-$repo/target}/release/theme-report && [[ -f $local_build ]] && matches "$local_build"; then
+  binary=$local_build
+else
+  download=true
+fi
+if $download; then
+  arch=$(uname -m)
+  [[ $arch == x86_64 ]] || { echo "There is no prebuilt analyzer for $arch. Install Rust and run: bash $repo/scripts/install.sh --build" >&2; exit 1; }
+  command -v curl >/dev/null || { echo "Downloading the analyzer needs curl." >&2; exit 1; }
+  name=theme-report-$version-linux-x86_64.tar.gz
+  url=https://github.com/OldJobobo/theme-report/releases/download/v$version
+  if $dry; then
+    echo "Would download $url/$name and check its checksum"
+  else
+    work=$(mktemp -d); cleanup+=("$work")
+    echo "Downloading theme-report $version..."
+    for file in "$name" "$name.sha256"; do
+      curl -fsSL --proto '=https' --tlsv1.2 -o "$work/$file" "$url/$file" ||
+        { echo "Could not download $url/$file" >&2; echo "To build it yourself instead: bash $repo/scripts/install.sh --build" >&2; exit 1; }
+    done
+    (cd -- "$work" && sha256sum --quiet -c -- "$name.sha256") || { echo "Checksum mismatch for $name; nothing was installed." >&2; exit 1; }
+    if command -v gh >/dev/null && gh auth status >/dev/null 2>&1; then
+      gh attestation verify "$work/$name" -R OldJobobo/theme-report >/dev/null ||
+        { echo "GitHub could not confirm $name was built by this project's release workflow; nothing was installed." >&2; exit 1; }
+      echo "Verified: checksum matches, and GitHub confirms the release workflow built it."
+    else
+      echo "Verified: checksum matches. (With the gh CLI logged in, the installer also checks who built it.)"
+    fi
+    mkdir -- "$work/x"
+    tar -xzf "$work/$name" -C "$work/x"
+    binary=$work/x/theme-report-$version-linux-x86_64/bin/theme-report
+  fi
+fi
+$dry || [[ -f $binary ]] || { echo "No analyzer binary at $binary" >&2; exit 1; }
 root=$(realpath -m -- "$root")
 [[ $root != *$'\n'* && $root != *$'\t'* ]] || { echo "Unsupported root name" >&2; exit 1; }
 plugin=.config/omarchy/plugins/oldjobobo.theme-report
@@ -68,16 +137,19 @@ for rel in "${paths[@]}" "$plugin/.theme-report-owned"; do
     actual=$(sha256sum -- "$target"); actual=${actual%% *}
     grep -Fqx -- "$actual"$'\t'"$rel" "$receipt" || { echo "Modified or unowned destination: $target" >&2; exit 1; }
   fi
-  if $dry; then printf 'Would install: %s\n' "$target"; else printf 'Install target: %s\n' "$target"; fi
+  if $dry; then printf 'Would install: %s\n' "${target/#"$HOME"/\~}"; fi
 done
-"$binary" version >/dev/null 2>&1 || { echo "Cannot run $binary on this system (wrong architecture or damaged build)." >&2; exit 1; }
+if [[ -f $binary ]]; then
+  "$binary" version >/dev/null 2>&1 || { echo "Cannot run $binary on this system (wrong architecture or damaged build)." >&2; exit 1; }
+  matches "$binary" || echo "Note: $binary is not version $version; the widget may not match it."
+fi
 $dry && exit 0
 updating=false
 plugin_changed=false
 [[ -f $receipt ]] && updating=true
 mkdir -p -- "$(dirname -- "$receipt")"
 tmp=$(mktemp -- "${receipt}.XXXXXX")
-trap 'rm -f -- "$tmp"' EXIT
+cleanup+=("$tmp")
 # Own both the previous and the new content before copying anything, so an interrupted
 # install can be re-run or uninstalled instead of reporting its own files as unowned.
 if $updating; then cat -- "$receipt" > "$tmp"; fi
@@ -86,6 +158,7 @@ for i in "${!paths[@]}"; do
 done
 mv -- "$tmp" "$receipt"
 tmp=$(mktemp -- "${receipt}.XXXXXX")
+cleanup+=("$tmp")
 # Keep ownership of installed optional files (hook, skill) during an update without their flag.
 for old in "$hookrel" "${skillrels[@]}"; do
   printf '%s\n' "${paths[@]}" | grep -Fqx -- "$old" && continue
@@ -109,15 +182,36 @@ for i in "${!paths[@]}"; do
   printf '%s\t%s\n' "$h" "${paths[$i]}" >> "$tmp"
 done
 mv -- "$tmp" "$receipt"
-if $updating && ! $plugin_changed; then
-  echo "Updated project-owned files. Plugin code is unchanged; no shell restart needed."
-elif $updating; then
-  echo "Updated project-owned files."
-  # Replacing QML under a running shell can crash Quickshell; load it with a clean restart.
-  echo "Load the new plugin code: omarchy restart shell"
-elif $checkout; then
-  echo "Installed the analyzer. Enable the widget if it is not already: omarchy plugin enable oldjobobo.theme-report"
-else
-  echo "Installed project-owned files. Rescan: omarchy-shell shell rescanPlugins"
-  echo "Then enable: omarchy plugin enable oldjobobo.theme-report"
+echo "Installed theme-report $("$root/.local/bin/theme-report" version 2>/dev/null | cut -d' ' -f2)."
+id=oldjobobo.theme-report
+ask() {
+  [[ -t 0 && -t 1 ]] || return 1
+  local reply
+  read -r -p "$1 [Y/n] " reply || return 1
+  [[ -z $reply || $reply == [Yy]* ]]
+}
+# Only touch the running desktop when installing into this user's own home.
+if [[ $root != "$(realpath -m -- "$HOME")" ]] || ! command -v omarchy >/dev/null; then
+  if ! $checkout; then echo "Then: omarchy-shell shell rescanPlugins && omarchy plugin enable $id"; fi
+  exit 0
 fi
+if $updating && $plugin_changed; then
+  # Replacing QML under a running shell can crash Quickshell; load it with a clean restart.
+  if ask "The widget changed. Restart the Omarchy shell now to load it?"; then
+    omarchy restart shell
+  else
+    echo "Load the new widget later with: omarchy restart shell"
+  fi
+elif ! $checkout && ! $updating; then
+  omarchy-shell shell rescanPlugins >/dev/null 2>&1 || true
+fi
+enabled=$(omarchy plugin list --json 2>/dev/null | jq -r --arg id "$id" '.[] | select(.id == $id) | .enabled' 2>/dev/null || true)
+if [[ $enabled != true ]]; then
+  if ask "Add the Theme Report badge to your bar now?"; then
+    omarchy plugin enable "$id"
+  else
+    echo "Add the badge to your bar later with: omarchy plugin enable $id"
+    exit 0
+  fi
+fi
+echo "Done. Click the Theme Report badge in your bar to see your theme's report."

@@ -22,18 +22,23 @@ Theme Report bundles neither. Without them, the affected wallpapers are reported
 
 ## Install
 
-Preview, then install into your home directory:
+The short version is in the README: `omarchy plugin add https://github.com/OldJobobo/theme-report.git --enable`, then `bash ~/.config/omarchy/plugins/oldjobobo.theme-report/scripts/install.sh`. `install.sh --help` lists the options.
 
-```sh
-bash scripts/install.sh --dry-run
-bash scripts/install.sh
-omarchy-shell shell rescanPlugins
-omarchy plugin enable oldjobobo.theme-report
-```
+**Where the analyzer comes from.** `install.sh` uses the first of these that applies:
 
-**Plugin-manager installs.** After `omarchy plugin add`, the plugin folder is a git checkout of this repository. Build there and run `bash scripts/install.sh` from it. Set `CARGO_TARGET_DIR` to keep build files out of `~/.config`; `install.sh` looks for the binary there too. From a checkout, the installer installs only the analyzer and any hook or skill you ask for, and leaves the git-managed plugin files alone. Its ownership record is ignored by git, so `omarchy plugin update` still sees a clean checkout.
+1. `--binary FILE`, if you pass it.
+2. `--build`: builds from source with `cargo build --release --locked`. Build files go to `~/.cache/theme-report/build` (or `$CARGO_TARGET_DIR`), not the plugin folder.
+3. The `bin/theme-report` bundled in a release archive.
+4. A cargo build in the checkout's `target/` folder (or `$CARGO_TARGET_DIR`), but only if its version matches the plugin.
+5. Otherwise, it downloads the release archive for the plugin's version from GitHub over HTTPS and checks it against the published SHA-256. If the `gh` CLI is logged in, it also runs `gh attestation verify` and stops if GitHub can't confirm the project's release workflow built the archive. Prebuilt binaries are x86_64 only; other machines use `--build`.
 
-**Release archives.** Run `bash scripts/install.sh` from the unpacked archive; it uses the bundled `bin/theme-report`. Pass `--binary FILE` to use a different binary. The installer checks that the binary runs on this machine before installing anything.
+Before installing anything, it checks that the binary runs on this machine.
+
+**Plugin-manager installs.** After `omarchy plugin add`, the plugin folder is a git checkout of this repository. Run from there, the installer adds only the analyzer and any hook or skill you ask for, and leaves the git-managed plugin files alone. Its ownership record is ignored by git, so `omarchy plugin update` still sees a clean checkout. After an update, run `install.sh` again to get the matching analyzer.
+
+**Release archives.** Run `bash scripts/install.sh` from the unpacked archive. It installs the widget files too, rescans plugins, and offers to add the badge to your bar.
+
+**What it changes in your running desktop.** Only when installing into your own home folder, and only with your answer: it asks before running `omarchy plugin enable` and before restarting the shell to load changed widget code. When it isn't run in a terminal, it asks nothing and prints the commands instead.
 
 Release archives are built by GitHub Actions from the tagged commit (`.github/workflows/release.yml`), never on a personal machine. The workflow builds the archive twice, from two checkouts in different folders, and refuses to publish unless the bytes match. It then installs and runs the exact archive before publishing it with a signed provenance attestation. `BUILDINFO.txt` in the archive records the commit and toolchain. To check an archive:
 
@@ -55,9 +60,9 @@ A source or archive install and a plugin-manager install use the same plugin fol
 
 Without the hook, nothing ever checks your theme in the background. The panel checks when you open it.
 
-The installer never edits your bar layout. It keeps a record of every file it installed, with its hash, in `.theme-report-owned` in the plugin folder. It refuses to overwrite a file it didn't install or that you have changed. During an update the record lists both old and new hashes, so an interrupted update can be re-run or uninstalled. `--root DIR` installs into another directory instead of your home, which is useful for testing.
+The installer edits your bar layout only through `omarchy plugin enable`, and only after asking. It keeps a record of every file it installed, with its hash, in `.theme-report-owned` in the plugin folder. It refuses to overwrite a file it didn't install or that you have changed. During an update the record lists both old and new hashes, so an interrupted update can be re-run or uninstalled. `--root DIR` installs into another directory instead of your home, which is useful for testing.
 
-Updating plugin files prints `omarchy restart shell`. Replacing plugin QML under a running shell can crash Quickshell, so a clean restart is the safe way to load new plugin code.
+When an update changes the widget's code, the installer offers to run `omarchy restart shell`. Replacing plugin QML under a running shell can crash Quickshell, so a clean restart is the safe way to load new plugin code.
 
 ## CLI
 
@@ -163,18 +168,16 @@ Prompts name each listed skill that exists, with its path, and never read or cop
 ## Uninstall
 
 ```sh
-omarchy plugin disable oldjobobo.theme-report
-bash scripts/uninstall.sh --dry-run
-bash scripts/uninstall.sh
+bash ~/.config/omarchy/plugins/oldjobobo.theme-report/scripts/uninstall.sh --dry-run   # preview
+bash ~/.config/omarchy/plugins/oldjobobo.theme-report/scripts/uninstall.sh
+omarchy plugin remove oldjobobo.theme-report --yes   # plugin-manager installs only
 ```
-
-For a plugin-manager install, run the script from `~/.config/omarchy/plugins/oldjobobo.theme-report`, then run `omarchy plugin remove oldjobobo.theme-report --yes` to remove the plugin folder.
 
 Uninstall disables the widget first (when installing into your own home and `omarchy` is available), then removes only files it installed that are unchanged. It keeps any file you modified and says so. Your cache, settings and bar layout are left alone; delete `~/.cache/theme-report` yourself if you want it gone.
 
 ## Troubleshooting
 
-- **The panel says the analyzer is missing.** Check that `~/.local/bin/theme-report` exists, then click Refresh.
+- **The panel says the analyzer is not installed.** Run `bash ~/.config/omarchy/plugins/oldjobobo.theme-report/scripts/install.sh`, then click Refresh.
 - **The widget isn't listed.** Run `omarchy-shell shell rescanPlugins`, check the plugin folder, then enable the widget. After updating plugin code, run `omarchy restart shell`. Replacing QML in a running shell can crash Quickshell, so restart rather than reloading repeatedly. Never stop the shell while the screen is locked.
 - **Provisional or "Not graded".** Open the affected area and expand the checks marked not measured; each says why. Common reasons are animated or unsupported wallpapers, missing ImageMagick or FFmpeg, and Omarchy changes the analyzer hasn't verified. Translucent surfaces that show application content are graded against a fixed set of reference backgrounds, which the report labels as such.
 - **Busy.** Another check is running, or the theme is being changed. Try again once it settles. A failed check keeps the previous result.

@@ -43,44 +43,42 @@ The agent checks its work with `theme-report audit`. If nothing needs fixing but
 
 **Review with &lt;agent&gt;** asks the agent for a read-only review that goes beyond the measured checks. It's offered for every theme, including ones that pass. The agent saves a Markdown write-up, and the panel shows it as an **Agent review** card at the top. The card is marked out of date once the theme changes.
 
-Prompts work as they are. For more detail on reading the report and making safe edits, install the optional `theme-report` agent skill with `bash scripts/install.sh --with-skill`.
+Prompts work as they are. For more detail on reading the report and making safe edits, install the optional `theme-report` agent skill by running the install command with `--with-skill`.
 
 ## Install
 
-Theme Report has two parts: the bar widget in this repository, and the `theme-report` analyzer that does the measuring. You can build the analyzer from source with Rust 1.88 or newer, or use the prebuilt x86_64 binary from the [latest release](https://github.com/OldJobobo/theme-report/releases/latest). Nothing needs root.
-
-**With Omarchy's plugin manager:**
+Run these two commands:
 
 ```sh
-omarchy plugin add https://github.com/OldJobobo/theme-report.git
-cd ~/.config/omarchy/plugins/oldjobobo.theme-report
-export CARGO_TARGET_DIR=~/.cache/theme-report/build   # keeps build files out of ~/.config
-cargo build --release --locked
-bash scripts/install.sh      # installs the analyzer; add --with-hook and/or --with-skill
-omarchy plugin enable oldjobobo.theme-report
+omarchy plugin add https://github.com/OldJobobo/theme-report.git --enable
+bash ~/.config/omarchy/plugins/oldjobobo.theme-report/scripts/install.sh
 ```
 
-To skip the build, download and unpack the release archive, then run `bash scripts/install.sh --binary <archive>/bin/theme-report` from the plugin folder instead.
+The first adds the badge to your bar. The second installs `theme-report`, the program that does the measuring. It downloads the prebuilt binary for this version from the [releases page](https://github.com/OldJobobo/theme-report/releases), checks its checksum, and puts it in `~/.local/bin`. If the `gh` CLI is installed and logged in, it also confirms with GitHub that the project's release workflow built the binary. Nothing needs root.
 
-Run from the plugin folder, `install.sh` installs only the analyzer (plus the hook or skill if you ask for them). The plugin files stay under `omarchy plugin update`'s control. After an update, rebuild and run `install.sh` again so the analyzer matches the widget.
+You can add options to the second command:
 
-**From a release archive or a source checkout:**
+| Option | What it does |
+| --- | --- |
+| `--with-hook` | Re-check your theme in the background after every theme switch |
+| `--with-skill` | Install the `theme-report` skill for your coding agents |
+| `--build` | Build from source with Rust 1.88+ instead of downloading (needed on non-x86_64 machines) |
+| `--dry-run` | Show what would be installed without changing anything |
+
+**Updating.** Run `omarchy plugin update oldjobobo.theme-report`, then run the install command again so the analyzer matches the new widget.
+
+**Removing.**
 
 ```sh
-cargo build --release --locked      # skip this in a release archive
-bash scripts/install.sh --dry-run   # preview
-bash scripts/install.sh             # add --with-hook to re-check on every theme switch
-omarchy-shell shell rescanPlugins
-omarchy plugin enable oldjobobo.theme-report
+bash ~/.config/omarchy/plugins/oldjobobo.theme-report/scripts/uninstall.sh
+omarchy plugin remove oldjobobo.theme-report --yes
 ```
 
-Here `install.sh` copies the plugin files too. When it updates an existing install, it tells you to run `omarchy restart shell` so the new plugin code loads cleanly.
+The uninstaller deletes only files it installed, and skips any you have changed.
 
-Use one method, not both: they install to the same folder, `~/.config/omarchy/plugins/oldjobobo.theme-report`. To switch, remove the first install.
+**Without the plugin manager.** Download the archive from the [latest release](https://github.com/OldJobobo/theme-report/releases/latest), unpack it, and run `bash scripts/install.sh` inside it. This installs the widget as well, then offers to add it to your bar. Pick one way to install: both use the same plugin folder.
 
-**Removing it.** `bash scripts/uninstall.sh` disables the widget and deletes only the files it installed, if you haven't changed them. For a plugin-manager install, run it from the plugin folder, then run `omarchy plugin remove oldjobobo.theme-report --yes`.
-
-**Dependencies.** Rust is needed only to build the analyzer. Optional: `ffmpeg` and `ffprobe` for video wallpapers, and ImageMagick for color-profiled or very large images. Without them, those wallpapers are listed as not measured, never as failures. The agent features use your Omarchy default agent, and `theme-report agent --copy` uses `wl-copy`.
+**Optional tools.** `ffmpeg` and `ffprobe` measure video wallpapers, and ImageMagick handles color-profiled or very large images. Without them, those wallpapers are listed as not measured, never as failures. The agent buttons use your Omarchy default agent.
 
 See `docs/installation.md` for what the widget, the analyzer and the agent prompts are allowed to do.
 

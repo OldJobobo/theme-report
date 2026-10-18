@@ -108,6 +108,14 @@ with tempfile.TemporaryDirectory(dir=WORK) as temp:
     command(*git, "add", "-A")
     command(*git, "commit", "-qm", "checkout")
     install = ["bash", str(checkout / "scripts/install.sh"), "--root", str(home), "--binary", str(BINARY), "--with-hook"]
+    # With no binary to hand, the installer plans to fetch the release matching the widget.
+    import os
+    env = {k: v for k, v in os.environ.items() if k != "CARGO_TARGET_DIR"}
+    plan = subprocess.run(["bash", str(checkout / "scripts/install.sh"), "--root", str(home), "--dry-run"],
+                          cwd=ROOT, env=env, text=True, capture_output=True)
+    version = json.loads((ROOT / "manifest.json").read_text())["version"]
+    assert plan.returncode == 0 and f"/v{version}/theme-report-{version}-linux-x86_64.tar.gz" in plan.stdout, plan
+    assert not (home / ".local").exists(), "A dry run downloads and installs nothing"
     command(*install)
     command(*install)
     assert (home / ".local/bin/theme-report").exists() and (home / ".config/omarchy/hooks/theme-set.d/theme-report").exists()

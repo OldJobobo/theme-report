@@ -291,7 +291,7 @@ ShellRoot {
                 stage++
             } else if (stage === 12) {
                 var failed = JSON.parse(second.statusJson())
-                if (!verify(!second.checking && !first.checking && failed.checking === false && String(failed.error).indexOf("Could not start") === 0, "missing analyzer clears busy and reports an error")) return
+                if (!verify(!second.checking && !first.checking && failed.checking === false && String(failed.error).indexOf("scripts/install.sh") > 0, "missing analyzer clears busy and reports an error")) return
                 console.log("PASS: startup idle, open-only audits, explicit Refresh, shared cached result, stale badge, no queued work, close cancellation, IPC ownership/routing/status/check/agent")
                 Qt.quit()
             }
