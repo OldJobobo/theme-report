@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.9.1 — 2026-10-18
+
+Security hardening for the marketplace review.
+
+- **The panel never reads files itself.** It only watches the saved report, the agent review, `theme.name` and the default-agent setting for changes, then asks the analyzer's new read-only `theme-report state` command for them. That command reads with the same bounded reader as audits: no symlinks, regular files only, nonblocking, size-limited. A review written by an agent can no longer point the panel at another file, hang it on a FIFO, or make it load a huge file.
+- **Bounded reads everywhere in the analyzer.** Prompts and handoffs now read the report, `theme.name`, the default-agent setting and `agent.toml` through the same reader.
+- **Release archives are built by CI.** A new release workflow builds the archive from the tagged commit, rebuilds it from a second checkout and requires identical bytes, installs and runs the exact archive, and publishes it with a signed provenance attestation (`gh attestation verify`). The build no longer embeds local paths, and `BUILDINFO.txt` records the commit and toolchain.
+
 ## 0.9.0 — 2026-10-18
 
 First public release, ready for the Omarchy plugin marketplace.

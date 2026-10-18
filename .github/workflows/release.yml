@@ -1,0 +1,80 @@
+name: Release
+# Builds the release archive from the tagged commit, proves the build is reproducible,
+# smoke-tests the exact archive, attests its provenance, and publishes it.
+on:
+  push:
+    tags: ["v*"]
+  workflow_dispatch:   # dry run: build, compare and smoke-test without publishing
+permissions:
+  contents: read
+jobs:
+  release:
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: write      # create the GitHub release
+      id-token: write      # sign the provenance attestation
+      attestations: write
+    env:
+      # The toolchain of record. BUILDINFO.txt in the archive records it too.
+      RUST_RELEASE: "1.99.0"
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          persist-credentials: false
+      - uses: dtolnay/rust-toolchain@683b588c487a69d01f6c6ddf40f036ff682cc2c8 # master
+        with:
+          toolchain: ${{ env.RUST_RELEASE }}
+          components: rust-docs   # ships the toolchain license texts the archive bundles
+      - name: Check the tag matches the versions
+        if: startsWith(github.ref, 'refs/tags/')
+        run: |
+          version=$(python3 -c 'import tomllib; print(tomllib.load(open("Cargo.toml","rb"))["package"]["version"])')
+          manifest=$(python3 -c 'import json; print(json.load(open("manifest.json"))["version"])')
+          [[ "$GITHUB_REF_NAME" == "v$version" && "$manifest" == "$version" ]] || { echo "Tag $GITHUB_REF_NAME, Cargo $version, manifest $manifest" >&2; exit 1; }
+          grep -q "^## $version " CHANGELOG.md
+      - name: Build the archive
+        run: bash scripts/package.sh
+      - name: Rebuild from a second checkout and compare bytes
+        run: |
+          second="$RUNNER_TEMP/second checkout"
+          git clone --quiet "$GITHUB_WORKSPACE" "$second"
+          git -C "$second" checkout --quiet "$GITHUB_SHA"
+          CARGO_HOME="$RUNNER_TEMP/cargo-second" bash "$second/scripts/package.sh"
+          cmp dist/*.tar.gz "$second"/dist/*.tar.gz
+      - name: Smoke-test the exact archive
+        run: |
+          work="$RUNNER_TEMP/smoke"
+          mkdir -p "$work/home"
+          tar -xzf dist/*.tar.gz -C "$work"
+          archive=$(echo "$work"/theme-report-*/)
+          bash "$archive/scripts/install.sh" --root "$work/home"
+          "$work/home/.local/bin/theme-report" version
+          "$work/home/.local/bin/theme-report" audit fixtures/themes/minimal --profile quattro-shell-2026-v1 --cache-dir "$work/cache" --format json > "$work/report.json"
+          python3 -c 'import json,sys; r=json.load(open(sys.argv[1])); assert r["schemaVersion"] == 2 and r["grade"], r' "$work/report.json"
+          bash "$archive/scripts/uninstall.sh" --root "$work/home"
+          [[ -z $(find "$work/home" -type f) ]]
+      - name: Checksums
+        run: cd dist && sha256sum -c *.sha256
+      - uses: actions/attest-build-provenance@4d101475d8b20a2381f78447822ac1eab6504dd8 # v4.2.2
+        if: startsWith(github.ref, 'refs/tags/')
+        with:
+          subject-path: dist/*.tar.gz
+      - name: Publish the release
+        if: startsWith(github.ref, 'refs/tags/')
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+        run: |
+          version=${GITHUB_REF_NAME#v}
+          awk -v v="$version" '$0 ~ "^## " v " " {on=1; next} /^## / {on=0} on' CHANGELOG.md > "$RUNNER_TEMP/notes.md"
+          {
+            echo
+            echo "Built by GitHub Actions from \`$GITHUB_SHA\` with Rust $RUST_RELEASE on ubuntu-24.04."
+            echo "Verify: \`gh attestation verify <archive> -R $GITHUB_REPOSITORY\`"
+          } >> "$RUNNER_TEMP/notes.md"
+          if gh release view "$GITHUB_REF_NAME" >/dev/null 2>&1; then
+            gh release upload "$GITHUB_REF_NAME" dist/*.tar.gz dist/*.sha256 --clobber
+          else
+            gh release create "$GITHUB_REF_NAME" dist/*.tar.gz dist/*.sha256 --verify-tag \
+              --title "Theme Report $version" --notes-file "$RUNNER_TEMP/notes.md"
+          fi

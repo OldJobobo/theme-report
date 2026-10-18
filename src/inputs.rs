@@ -62,7 +62,7 @@ pub fn hash(data: &[u8]) -> String {
     format!("{:x}", Sha256::digest(data))
 }
 
-pub(crate) fn bounded(path: &Path, limit: u64) -> Result<Vec<u8>> {
+pub fn bounded(path: &Path, limit: u64) -> Result<Vec<u8>> {
     // Nonblocking/no-follow open prevents a file-to-FIFO/symlink swap from hanging capture.
     let mut options = fs::OpenOptions::new();
     options.read(true);

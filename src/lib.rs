@@ -6,5 +6,6 @@ pub mod contract;
 pub mod inputs;
 pub mod model;
 pub mod rules;
+pub mod state;
 pub mod video;
 pub mod wallpaper;

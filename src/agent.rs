@@ -159,7 +159,10 @@ struct OverlayEntry {
 
 /// Read the optional overlay. Invalid or missing entries are skipped, never fatal.
 pub fn overlay(env: &Env) -> Vec<DesignSkill> {
-    let Ok(text) = fs::read_to_string(env.overlay_path()) else {
+    let Some(text) = crate::inputs::bounded(&env.overlay_path(), 64 * 1024)
+        .ok()
+        .and_then(|bytes| String::from_utf8(bytes).ok())
+    else {
         return vec![];
     };
     let Ok(file) = toml::from_str::<OverlayFile>(&text) else {
@@ -780,8 +783,7 @@ fn prune_handoffs(dir: &Path, keep: usize) {
 
 /// The default agent's command name, if one is chosen.
 pub fn default_agent(env: &Env) -> Option<String> {
-    let text = fs::read_to_string(env.home.join(".config/omarchy/defaults/agent")).ok()?;
-    let agent = text.lines().next()?.trim().to_string();
+    let agent = crate::state::first_line(&env.home.join(".config/omarchy/defaults/agent"))?;
     safe_name(&agent, 32).then_some(agent)
 }
 

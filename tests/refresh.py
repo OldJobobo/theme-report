@@ -21,6 +21,32 @@ home = pathlib.Path(os.environ["HOME"])
 if "change-inputs" in sys.argv:
     (home / ".local/state/omarchy/current/theme/colors.toml").write_text("changed")
     sys.exit(0)
+if sys.argv[1:2] == ["state"]:
+    # Mirrors the real reader's output shape; reading state never audits.
+    with (home / "state-log").open("a") as log:
+        log.write(" ".join(sys.argv[1:]) + "\\n")
+    cache = pathlib.Path(os.environ["XDG_CACHE_HOME"]) / "theme-report"
+    def read(path):
+        try:
+            return path.read_text()
+        except OSError:
+            return None
+    try:
+        report = json.loads(read(cache / "current.json") or "null")
+    except ValueError:
+        report = None
+    theme = sys.argv[sys.argv.index("--theme") + 1] if "--theme" in sys.argv else (report or {}).get("theme")
+    name = read(home / ".local/state/omarchy/current/theme.name")
+    agent = read(home / ".config/omarchy/defaults/agent")
+    review = None
+    if theme:
+        meta = read(cache / "reviews" / (theme + ".json"))
+        review = {"theme": theme, "text": read(cache / "reviews" / (theme + ".md")),
+                  "meta": json.loads(meta) if meta else None, "problem": None}
+    print(json.dumps({"schemaVersion": 1, "themeName": name.strip() if name else None,
+                      "agent": agent.split("\\n")[0].strip() if agent else None,
+                      "report": report if isinstance(report, dict) else None, "review": review}))
+    sys.exit(0)
 if sys.argv[1:2] in (["agent"], ["prompt"]):
     with (home / "agent-log").open("a") as log:
         log.write(" ".join(sys.argv[1:]) + "\\n")
@@ -297,7 +323,13 @@ ShellRoot {
     main = (ROOT / "Main.qml").read_text()
     assert not any(token in main for token in
                    ["Component.onCompleted", "Timer", "queued", "freshnessExpiry"]), "Automatic audits must remain absent"
-    # File views only display published results; they never start the analyzer.
+    # File views only watch: they never read a file themselves and never audit. Every
+    # read goes through the analyzer's read-only `state` command.
     for block in main.split("FileView {")[1:]:
-        assert "request(" not in block.split("\n    }")[0] and "running = true" not in block.split("\n    }")[0]
+        body = block.split("\n    }")[0]
+        assert "preload: false" in body and "onFileChanged: root.readState()" in body, body
+        assert "request(" not in body and "running = true" not in body and "text()" not in body, body
+    assert "text()" not in main and ".reload()" not in main, "The panel must not read files directly"
+    states = (home / "state-log").read_text().splitlines()
+    assert states and all(line.split()[0] == "state" for line in states), states
     print("PASS: open-only audit regression and IPC (real Process, two widgets, exact invocation counts, cancellation, single IPC owner, focused routing, agent handoffs)")

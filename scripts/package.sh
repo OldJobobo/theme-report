@@ -4,6 +4,17 @@ root=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd)
 cd -- "$root"
 export CARGO_HOME="${CARGO_HOME:-$root/.build/cargo}"
 export PYTHONDONTWRITEBYTECODE=1
+# Reproducible build: no local paths in the binary, and a target folder of its own so
+# the remapping flags never mix with ordinary builds. Same commit + same toolchain on the
+# same platform gives the same bytes (CI rebuilds from a second checkout to prove it).
+export CARGO_TARGET_DIR="$root/target/package"
+export SOURCE_DATE_EPOCH=0
+sep=$'\x1f'
+# With rust-src installed, std paths point into the local toolchain; map them back to
+# the /rustc/<commit> form a toolchain without rust-src uses.
+rustc_commit=$(rustc -vV | awk '/^commit-hash:/ { print $2 }')
+std_src="$(rustc --print sysroot)/lib/rustlib/src/rust"
+export CARGO_ENCODED_RUSTFLAGS="--remap-path-prefix=$root=/theme-report$sep--remap-path-prefix=$CARGO_HOME=/cargo$sep--remap-path-prefix=$std_src=/rustc/$rustc_commit"
 cargo build --release --locked
 version=$(python3 -c 'import tomllib; print(tomllib.load(open("Cargo.toml","rb"))["package"]["version"])')
 name="theme-report-$version-linux-$(uname -m)"
@@ -11,7 +22,7 @@ mkdir -p dist .testbed
 work=$(mktemp -d "$root/.testbed/package.XXXXXX")
 trap 'rm -rf -- "$work"' EXIT
 mkdir -p "$work/$name/bin" "$work/$name/scripts" "$work/$name/docs"
-cp target/release/theme-report "$work/$name/bin/"
+cp "$CARGO_TARGET_DIR/release/theme-report" "$work/$name/bin/"
 cp scripts/{install,uninstall}.sh "$work/$name/scripts/"
 cp -r hooks rules schema skills "$work/$name/"
 find docs -maxdepth 1 -type f -exec cp -t "$work/$name/docs/" {} +
@@ -38,9 +49,18 @@ for package in json.load(open(sys.argv[1]))['packages']:
 (out / 'DEPENDENCIES.txt').write_text('\n'.join(rows) + '\n')
 PY
 sysroot=$(rustc --print sysroot)
+[[ -d $sysroot/share/doc/rust/licenses ]] || { echo "Install the rust-docs component: it has the toolchain license texts." >&2; exit 1; }
 cp -r "$sysroot/share/doc/rust/licenses" "$work/$name/licenses/rust-toolchain"
 cp "$sysroot/share/doc/rust/COPYRIGHT-library.html" "$work/$name/licenses/"
 printf 'Preview: bash scripts/install.sh --dry-run\nInstall: bash scripts/install.sh (add --with-hook and/or --with-skill)\nThen: omarchy-shell shell rescanPlugins; omarchy plugin enable oldjobobo.theme-report\nPlugin-manager install: from the plugin folder, bash scripts/install.sh --binary <this folder>/bin/theme-report\n' > "$work/$name/RELEASE.txt"
-tar --sort=name --mtime=@0 --owner=0 --group=0 --numeric-owner -czf "dist/$name.tar.gz" -C "$work" "$name"
+commit=$(git rev-parse HEAD 2>/dev/null || echo unknown)
+if [[ -n $(git status --porcelain --untracked-files=no 2>/dev/null) ]]; then commit="$commit (modified)"; fi
+{
+  printf 'Source: https://github.com/OldJobobo/theme-report\nCommit: %s\n' "$commit"
+  printf 'Built with: bash scripts/package.sh\n'
+  rustc -vV
+  cargo -V
+} > "$work/$name/BUILDINFO.txt"
+tar --sort=name --mtime=@0 --owner=0 --group=0 --numeric-owner --mode=u+rwX,go+rX,go-w -cf - -C "$work" "$name" | gzip -n -9 > "dist/$name.tar.gz"
 (cd dist && sha256sum "$name.tar.gz" > "$name.tar.gz.sha256")
 printf 'Created dist/%s.tar.gz\n' "$name"

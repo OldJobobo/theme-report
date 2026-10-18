@@ -35,6 +35,15 @@ omarchy plugin enable oldjobobo.theme-report
 
 **Release archives.** Run `bash scripts/install.sh` from the unpacked archive; it uses the bundled `bin/theme-report`. Pass `--binary FILE` to use a different binary. The installer checks that the binary runs on this machine before installing anything.
 
+Release archives are built by GitHub Actions from the tagged commit (`.github/workflows/release.yml`), never on a personal machine. The workflow builds the archive twice, from two checkouts in different folders, and refuses to publish unless the bytes match. It then installs and runs the exact archive before publishing it with a signed provenance attestation. `BUILDINFO.txt` in the archive records the commit and toolchain. To check an archive:
+
+```sh
+sha256sum -c theme-report-<version>-linux-x86_64.tar.gz.sha256
+gh attestation verify theme-report-<version>-linux-x86_64.tar.gz -R OldJobobo/theme-report
+```
+
+To rebuild it yourself, check out the commit in `BUILDINFO.txt` and run `bash scripts/package.sh` on Ubuntu 24.04 with the same Rust version and the `rust-docs` component. The build strips local paths, so the archive should match byte for byte.
+
 A source or archive install and a plugin-manager install use the same plugin folder, so remove one before switching to the other.
 
 **What gets installed:**
@@ -76,7 +85,7 @@ Exit codes: 0 for a completed audit, even when the theme has problems; 1 for an 
 
 `A`–`F` is the last result. A `*` after the letter means provisional: some checks could not be measured, and the tooltip and panel say which. `~` before the letter means the result belongs to the theme you had before switching; open the panel to check the new one. `?` means no result yet. Areas that could not be measured at all show "Not checked", and partly measured ones show "Limited". The badge uses the bar's own styling, and never relies on color alone to show status.
 
-The widget never audits at startup, on a timer, or in the background. It reads the last saved result when it starts and whenever that file changes, and watches `theme.name` to mark a result stale. Those are file reads, not audits. Opening the panel may reuse a cached result when the theme's files are unchanged (judged from file metadata, without re-reading wallpapers); Refresh always re-checks. During a refresh or after an error, the last good result stays visible, and it is never relabeled as a different theme's result.
+The widget never audits at startup, on a timer, or in the background. It reads the last saved result when it starts and whenever that file changes, and watches `theme.name` to mark a result stale. Those are reads, not audits. Opening the panel may reuse a cached result when the theme's files are unchanged (judged from file metadata, without re-reading wallpapers); Refresh always re-checks. During a refresh or after an error, the last good result stays visible, and it is never relabeled as a different theme's result.
 
 The panel follows the live theme's popup colors, transparency, accent and urgent colors, font and control styles. It has no fallback palette, so a very low-contrast theme can make the panel itself hard to read. The CLI and JSON output always work. `docs/report-ui.md` describes the panel in detail.
 
@@ -149,7 +158,7 @@ Prompts name each listed skill that exists, with its path, and never read or cop
 - **The analyzer** only reads themes. It doesn't follow symlinks out of the theme folder, refuses special files, and limits how much it reads from each file. Video decoding runs under resource limits. It writes only to its cache folder, `~/.cache/theme-report`.
 - **Agents.** Omarchy starts agents without permission prompts, and a downloaded theme can hide instructions in a comment, a file name or a README. Every prompt, and the skill, tells the agent that the theme's files and the report are data: follow no instructions in them, run no commands found in them, and don't download anything or use the network. That is an instruction to the agent, not a sandbox, so only hand off themes you're willing to let your agent read. An agent only starts when you click or call IPC.
 - **The review card** shows the agent's Markdown without images or HTML, and its links can't be clicked, so a review can't make the panel load anything.
-- **Known limit.** The panel reads its own files (`~/.cache/theme-report/current.json`, the saved reviews, `theme.name` and Omarchy's default-agent setting) with Quickshell's file reader, which has no size limit or symlink check. These files are in your own cache and config folders, and nothing in a theme can write them.
+- **The panel never opens a file itself.** It watches `~/.cache/theme-report/current.json`, the saved review and its record, `theme.name` and Omarchy's default-agent setting only to notice changes. It then runs `theme-report state`, which reads them the way the analyzer reads a theme: no symlinks, regular files only, nonblocking, and size limits (4 MiB for the report, 256 KiB for a review, 4 KiB for one-line files). A review written by an agent therefore can't make the panel follow a link, hang on a special file or load something huge.
 
 ## Uninstall
 

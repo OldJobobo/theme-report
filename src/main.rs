@@ -67,6 +67,17 @@ enum Commands {
         #[arg(long)]
         copy: bool,
     },
+    /// Print what the panel shows between audits, as JSON: the published report, the
+    /// active theme name, the default agent and the saved review. Reads only; never audits.
+    #[command(hide = true)]
+    State {
+        /// Whose saved review to read (defaults to the published report's theme).
+        #[arg(long)]
+        theme: Option<String>,
+        /// Report cache (defaults to $XDG_CACHE_HOME/theme-report).
+        #[arg(long)]
+        cache_dir: Option<PathBuf>,
+    },
     #[command(hide = true)]
     DecodeImage {
         path: PathBuf,
@@ -105,21 +116,22 @@ fn handoff(args: &HandoffArgs) -> Result<(agent::Env, agent::Prompt, Report)> {
         .clone()
         .unwrap_or_else(|| default_cache(&home));
     let env = agent::Env::from_process(resolve_omarchy(args.omarchy_root.clone()), cache)?;
-    let path = args
-        .report
-        .clone()
-        .unwrap_or_else(|| env.cache.join("current.json"));
-    let text = std::fs::read_to_string(&path)
+    // An explicit --report may be a link the user chose; the published report never is.
+    let path = match &args.report {
+        Some(p) => p.canonicalize().context("Cannot find that report file")?,
+        None => env.cache.join("current.json"),
+    };
+    let bytes = theme_report::inputs::bounded(&path, theme_report::state::REPORT_LIMIT)
         .with_context(|| "No report yet. Run theme-report audit --current first.")?;
     let report: Report =
-        serde_json::from_str(&text).context("The report file is not a supported report")?;
+        serde_json::from_slice(&bytes).context("The report file is not a supported report")?;
     if report.schema_version != 2 {
         bail!("Unsupported report format")
     }
     if args.report.is_none() {
-        let active = std::fs::read_to_string(home.join(".local/state/omarchy/current/theme.name"))
-            .map(|t| t.trim().to_string())
-            .unwrap_or_default();
+        let active =
+            theme_report::state::first_line(&home.join(".local/state/omarchy/current/theme.name"))
+                .unwrap_or_default();
         if !active.is_empty() && active != report.theme {
             bail!(
                 "The last report is for {}, but the current theme is {}. Run theme-report audit --current first.",
@@ -223,6 +235,15 @@ fn main() {
 }
 fn run(cli: Cli) -> Result<()> {
     match cli.command {
+        Commands::State { theme, cache_dir } => {
+            let home = PathBuf::from(std::env::var_os("HOME").context("HOME is not set")?);
+            let cache = cache_dir.unwrap_or_else(|| default_cache(&home));
+            let env = agent::Env::from_process(resolve_omarchy(None), cache)?;
+            println!(
+                "{}",
+                theme_report::state::panel_state(&env, theme.as_deref())
+            );
+        }
         Commands::DecodeImage { path } => {
             let result = match theme_report::wallpaper::decode(&path) {
                 Ok(samples) => serde_json::json!({"samples":samples}),

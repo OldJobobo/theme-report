@@ -62,9 +62,9 @@ Panel {
     onOpenedChanged: {
         if (opened) request(false)
         else audit.running = false
-        // Reading a saved agent review is a file read, not an audit; an agent may have
-        // written it since the panel last opened.
-        if (opened) { reviewFile.reload(); reviewRecord.reload() }
+        // Re-reading the saved state is not an audit; an agent may have written a
+        // review since the panel last opened.
+        if (opened) readState()
     }
     Process {
         id: audit
@@ -316,58 +316,84 @@ Panel {
     readonly property string reviewTheme: report && /^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$/.test(String(report.theme)) ? report.theme : ""
     property string reviewText: ""
     property var reviewMeta: null
-    FileView {
-        id: reviewFile
-        path: root.reviewTheme ? root.cacheHome + "/theme-report/reviews/" + root.reviewTheme + ".md" : ""
-        watchChanges: true
-        printErrors: false
-        onPathChanged: root.reviewText = ""
-        onFileChanged: reload()
-        onLoaded: root.reviewText = text().slice(0, 40000)
-        onLoadFailed: root.reviewText = ""
-    }
-    FileView {
-        id: reviewRecord
-        path: root.reviewTheme ? root.cacheHome + "/theme-report/reviews/" + root.reviewTheme + ".json" : ""
-        watchChanges: true
-        printErrors: false
-        onPathChanged: root.reviewMeta = null
-        onFileChanged: reload()
-        onLoaded: {
-            try { root.reviewMeta = JSON.parse(text()) } catch (e) { root.reviewMeta = null }
-        }
-        onLoadFailed: root.reviewMeta = null
-    }
-    FileView {
-        path: root.home + "/.config/omarchy/defaults/agent"
-        watchChanges: true
-        printErrors: false
-        onFileChanged: reload()
-        onLoaded: root.agentId = text().split("\n")[0].trim()
-        onLoadFailed: root.agentId = ""
-    }
+    onReviewThemeChanged: readState()
 
-    // Reading the last published result is not an audit: it restores the badge after a
-    // shell restart and picks up results from the optional theme-set hook.
+    // Saved state: the last published result (restores the badge after a shell restart
+    // and picks up results from the optional theme-set hook), the active theme name, the
+    // default agent and the saved review. Reading it is not an audit. The panel never
+    // opens these files itself: the watchers below only notice changes, and the analyzer
+    // reads the files with its bounded, no-symlink, regular-file-only reader.
+    property bool stateDirty: false
+    property string stateOutput: ""
+    function readState() {
+        if (stateRun.running) { stateDirty = true; return }
+        stateDirty = false
+        stateOutput = ""
+        stateRun.command = [analyzer, "state"].concat(reviewTheme ? ["--theme", reviewTheme] : [])
+        stateRun.running = true
+    }
+    function applyState() {
+        var s = null
+        try { s = JSON.parse(stateOutput) } catch (e) {}
+        if (s && s.schemaVersion === 1) {
+            currentTheme = typeof s.themeName === "string" ? s.themeName : ""
+            agentId = typeof s.agent === "string" ? s.agent : ""
+            // Keep the same object when nothing was published since, so open cards stay put.
+            var r0 = s.report
+            if (!audit.running && accepted(r0) && !(report && report.auditTimestamp === r0.auditTimestamp && report.inputFingerprint === r0.inputFingerprint && report.theme === r0.theme)) report = r0
+            var r = s.review
+            if (r && r.theme === reviewTheme) {
+                reviewText = typeof r.text === "string" ? r.text : typeof r.problem === "string" ? r.problem : ""
+                reviewMeta = r.meta && typeof r.meta === "object" ? r.meta : null
+            } else {
+                reviewText = ""
+                reviewMeta = null
+            }
+        }
+        if (stateDirty) Qt.callLater(readState)
+    }
+    Process {
+        id: stateRun
+        // Read once at startup; afterwards only when a watched file changes or the panel opens.
+        command: [root.analyzer, "state"]
+        running: true
+        stdout: StdioCollector { waitForEnd: true; onStreamFinished: root.stateOutput = text }
+        onRunningChanged: if (!running) Qt.callLater(root.applyState)
+    }
     FileView {
         path: root.cacheHome + "/theme-report/current.json"
+        preload: false
         watchChanges: true
         printErrors: false
-        onFileChanged: reload()
-        onLoaded: {
-            if (audit.running) return
-            try {
-                var data = JSON.parse(text())
-                if (root.accepted(data)) root.report = data
-            } catch (e) {}
-        }
+        onFileChanged: root.readState()
     }
     FileView {
         path: root.home + "/.local/state/omarchy/current/theme.name"
+        preload: false
         watchChanges: true
         printErrors: false
-        onFileChanged: reload()
-        onLoaded: root.currentTheme = text().trim()
+        onFileChanged: root.readState()
+    }
+    FileView {
+        path: root.home + "/.config/omarchy/defaults/agent"
+        preload: false
+        watchChanges: true
+        printErrors: false
+        onFileChanged: root.readState()
+    }
+    FileView {
+        path: root.reviewTheme ? root.cacheHome + "/theme-report/reviews/" + root.reviewTheme + ".md" : ""
+        preload: false
+        watchChanges: true
+        printErrors: false
+        onFileChanged: root.readState()
+    }
+    FileView {
+        path: root.reviewTheme ? root.cacheHome + "/theme-report/reviews/" + root.reviewTheme + ".json" : ""
+        preload: false
+        watchChanges: true
+        printErrors: false
+        onFileChanged: root.readState()
     }
     WidgetButton {
         id: badge

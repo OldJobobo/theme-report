@@ -8,7 +8,7 @@ A check that finishes quickly (usually a cache hit) shows no transition. If one 
 
 ## Badge
 
-The badge shows the last result's letter, `*` when provisional, and `?` when there is none. At startup it reads the last saved result from the cache; that is a file read, not a check. It also picks up results written by the optional theme-switch hook. When `theme.name` no longer matches the result's theme, the badge shows `~` before the letter and the tooltip names the previous theme.
+The badge shows the last result's letter, `*` when provisional, and `?` when there is none. At startup it reads the last saved result from the cache (through the analyzer's read-only `state` command); that is a read, not a check. It also picks up results written by the optional theme-switch hook. When `theme.name` no longer matches the result's theme, the badge shows `~` before the letter and the tooltip names the previous theme.
 
 ## IPC
 
