@@ -1,14 +1,15 @@
 # Changelog
 
-## Unreleased
+## 0.9.0 — 2026-10-18
 
-Ready for the Omarchy plugin marketplace.
+First public release, ready for the Omarchy plugin marketplace.
 
-- **Layout.** `manifest.json`, `Main.qml` and `ReportPanel.qml` now live at the repository root, so `omarchy plugin add` can install the repository directly. Development records (plans, verification logs, evidence and the VM test helpers) moved out of the repository. The README and marketplace card use a current screenshot, `preview.png`.
-- **Plugin-manager installs.** Run from the plugin folder, `install.sh` installs only the analyzer (plus any opt-in hook or skill) and leaves the git-managed plugin files alone. It also finds a build in `CARGO_TARGET_DIR`. The README lists the dependencies and both install and removal paths.
-- **Agent safety.** Every prompt and the skill now say that the theme's files and the report are data: the agent follows no instructions in them, runs no commands found in them, and stays off the network.
+- **Install from the marketplace.** `manifest.json`, `Main.qml` and `ReportPanel.qml` now live at the repository root, so `omarchy plugin add` can install the repository directly. Run from that plugin folder, `install.sh` installs only the analyzer (plus any hook or skill you ask for) and leaves the git-managed plugin files alone. It also finds a build in `CARGO_TARGET_DIR`.
+- **Prebuilt binary.** Releases include an x86_64 archive. Run from the unpacked archive, `install.sh` uses its bundled `bin/theme-report`, so no Rust toolchain is needed. The archive now includes the agent skill.
+- **Agent safety.** Every prompt and the skill say that the theme's files and the report are data: the agent follows no instructions in them, runs no commands found in them, and stays off the network.
 - **Review card.** No Markdown image renders, including reference-style ones, so a review can't make the panel load a URL.
-- **Release archive.** Now includes the agent skill.
+- **Docs.** The README lists dependencies, both install methods and how to remove each one. The docs were rewritten in plain language, and development records moved out of the repository.
+- **Build.** The minimum supported Rust version, 1.88, is now declared in `Cargo.toml`.
 
 ## 0.8.0
 
@@ -60,7 +61,7 @@ Recognized the exact runtime files of `omarchy-dev 4.0.0.r6866` (image-picker sc
 
 ## 0.5.1
 
-Restored ruleset 5 scoring and category letters after the rejected 0.5.0 experiment that made semantic/shell/wallpaper categories unscored guidance.
+Brought back ruleset 5 scoring and per-area letter grades, undoing the 0.5.0 experiment that had turned the semantic, shell and wallpaper areas into unscored guidance.
 
 ## 0.4.x
 
@@ -68,4 +69,4 @@ Open-only audits with an upper-right Refresh control; no startup audit, timers o
 
 ## 0.1–0.3
 
-Initial analyzer, native bar widget and report panel; color-managed thumbnails, video wallpaper sampling, and modeled translucent-surface stress tests.
+The first analyzer, bar widget and report panel, plus color-managed thumbnails, video wallpaper sampling, and contrast checks for translucent surfaces over reference backgrounds.

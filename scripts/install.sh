@@ -16,6 +16,8 @@ while (($#)); do
   esac
 done
 repo=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd)
+# A release archive ships its prebuilt analyzer in bin/; a checkout uses its cargo build.
+if [[ -z $binary && -f $repo/bin/theme-report ]]; then binary=$repo/bin/theme-report; fi
 binary=${binary:-${CARGO_TARGET_DIR:-$repo/target}/release/theme-report}
 [[ -f $binary ]] || { echo "Build with cargo build --release --locked first." >&2; exit 1; }
 root=$(realpath -m -- "$root")

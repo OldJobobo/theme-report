@@ -40,7 +40,7 @@ PY
 sysroot=$(rustc --print sysroot)
 cp -r "$sysroot/share/doc/rust/licenses" "$work/$name/licenses/rust-toolchain"
 cp "$sysroot/share/doc/rust/COPYRIGHT-library.html" "$work/$name/licenses/"
-printf 'Install preview: bash scripts/install.sh --binary bin/theme-report --dry-run\nInstall with optional hook: bash scripts/install.sh --binary bin/theme-report --with-hook\nThen: omarchy-shell shell rescanPlugins; omarchy plugin enable oldjobobo.theme-report\n' > "$work/$name/RELEASE.txt"
+printf 'Preview: bash scripts/install.sh --dry-run\nInstall: bash scripts/install.sh (add --with-hook and/or --with-skill)\nThen: omarchy-shell shell rescanPlugins; omarchy plugin enable oldjobobo.theme-report\nPlugin-manager install: from the plugin folder, bash scripts/install.sh --binary <this folder>/bin/theme-report\n' > "$work/$name/RELEASE.txt"
 tar --sort=name --mtime=@0 --owner=0 --group=0 --numeric-owner -czf "dist/$name.tar.gz" -C "$work" "$name"
-sha256sum "dist/$name.tar.gz" > "dist/$name.tar.gz.sha256"
+(cd dist && sha256sum "$name.tar.gz" > "$name.tar.gz.sha256")
 printf 'Created dist/%s.tar.gz\n' "$name"

@@ -2,7 +2,7 @@
   "schemaVersion": 1,
   "id": "oldjobobo.theme-report",
   "name": "Theme Report",
-  "version": "0.8.0",
+  "version": "0.9.0",
   "author": "OldJobobo",
   "description": "Read-only Quattro theme health with reproducible evidence",
   "kinds": ["bar-widget"],

@@ -50,7 +50,7 @@ Each entry in `findings` has a `ruleId`, `category`, `severity`, `evidence`, `so
 |---|---|
 | `failure` | Below the failure threshold. The rule loses its full budget. |
 | `caution` | Between the failure and pass thresholds. It loses half its budget. |
-| `unassessed` | Could not be measured. Not a pass or a failure. `evidence.reason` says why. |
+| `unassessed` | Could not be measured, so it is neither a pass nor a failure; `evidence.reason` says why. |
 | `advisory` | Informational, never scored. |
 | `pass` | Meets its target. |
 
