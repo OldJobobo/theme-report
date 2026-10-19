@@ -30,7 +30,7 @@ The short version is in the README: `omarchy plugin add https://github.com/OldJo
 2. `--build`: builds from source with `cargo build --release --locked`. Build files go to `~/.cache/theme-report/build` (or `$CARGO_TARGET_DIR`), not the plugin folder.
 3. The `bin/theme-report` bundled in a release archive.
 4. A cargo build in the checkout's `target/` folder (or `$CARGO_TARGET_DIR`), but only if its version matches the plugin.
-5. Otherwise, it downloads the release archive for the plugin's version from GitHub over HTTPS and checks it against the published SHA-256. If the `gh` CLI is logged in, it also runs `gh attestation verify` and stops if GitHub can't confirm the project's release workflow built the archive. Prebuilt binaries are x86_64 only; other machines use `--build`.
+5. Otherwise, it downloads the release archive for the plugin's version from GitHub over HTTPS and checks its SHA-256 against the digest pinned in `scripts/install.sh`. It never downloads or trusts a checksum alongside the archive. A replaced asset fails before extraction or execution, even without `gh`. If the `gh` CLI is logged in, attestation verification additionally requires the pinned source commit, the matching version tag, and `.github/workflows/release.yml`; any verification failure stops installation. Versions without a reviewed digest fail closed and must use `--build`. Prebuilt binaries are x86_64 only; other machines use `--build`.
 
 Before installing anything, it checks that the binary runs on this machine.
 
@@ -42,10 +42,17 @@ Before installing anything, it checks that the binary runs on this machine.
 
 Release archives are built by GitHub Actions from the tagged commit (`.github/workflows/release.yml`), never on a personal machine. The workflow builds the archive twice, from two checkouts in different folders, and refuses to publish unless the bytes match. It then installs and runs the exact archive before publishing it with a signed provenance attestation. `BUILDINFO.txt` in the archive records the commit and toolchain. To check an archive:
 
+For the current reviewed archive:
+
 ```sh
-sha256sum -c theme-report-<version>-linux-x86_64.tar.gz.sha256
-gh attestation verify theme-report-<version>-linux-x86_64.tar.gz -R OldJobobo/theme-report
+printf '%s  %s\n' 68ef45e65ea03bdc15da7c723df0ecd778e6859efd6def8274a78c49c6dbd531 theme-report-0.9.1-linux-x86_64.tar.gz | sha256sum -c -
+gh attestation verify theme-report-0.9.1-linux-x86_64.tar.gz -R OldJobobo/theme-report \
+  --source-digest 3407b2670c63b24dafe4f215081ba14d490d6543 \
+  --source-ref refs/tags/v0.9.1 \
+  --signer-workflow OldJobobo/theme-report/.github/workflows/release.yml
 ```
+
+**Publishing updates.** The workflow only creates new releases; it cannot replace assets on an existing release. After a new analyzer release is published, verify its archive and attestation against the expected tagged source commit and workflow, then add that archive's SHA-256 and source commit to the installer's version/architecture table in a separate reviewed plugin commit. This two-step process avoids a self-referential archive digest. Do not retag or replace published assets. The existing 0.9.1 release remains mutable on GitHub, but changing its bytes cannot change what a pinned plugin checkout accepts. A checksum downloaded from the same release is only a corruption check, not this trust anchor. Explicit `--binary`, bundled-archive and local-build installs remain caller-trusted inputs; verify an archive before unpacking or running its installer.
 
 To rebuild it yourself, check out the commit in `BUILDINFO.txt` and run `bash scripts/package.sh` on Ubuntu 24.04 with the same Rust version and the `rust-docs` component. The build strips local paths, so the archive should match byte for byte.
 

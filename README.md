@@ -54,7 +54,7 @@ omarchy plugin add https://github.com/OldJobobo/theme-report.git --enable
 bash ~/.config/omarchy/plugins/oldjobobo.theme-report/scripts/install.sh
 ```
 
-The first adds the badge to your bar. The second installs `theme-report`, the program that does the measuring. It downloads the prebuilt binary for this version from the [releases page](https://github.com/OldJobobo/theme-report/releases), checks its checksum, and puts it in `~/.local/bin`. If the `gh` CLI is installed and logged in, it also confirms with GitHub that the project's release workflow built the binary. Nothing needs root.
+The first adds the badge to your bar. The second installs `theme-report`, the program that does the measuring. It downloads the prebuilt binary for this version from the [releases page](https://github.com/OldJobobo/theme-report/releases), checks its SHA-256 against a digest pinned in the plugin's reviewed installer source (not a downloaded checksum), and puts it in `~/.local/bin`. If the `gh` CLI is installed and logged in, it also verifies the exact source commit, release tag and release workflow with GitHub. Nothing needs root.
 
 You can add options to the second command:
 

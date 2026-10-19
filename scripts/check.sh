@@ -9,6 +9,7 @@ cargo test --locked
 cargo clippy --all-targets -- -D warnings
 cargo build --release --locked
 python3 tests/tooling.py
+python3 tests/download.py
 if command -v quickshell >/dev/null; then
   python3 tests/refresh.py
 fi

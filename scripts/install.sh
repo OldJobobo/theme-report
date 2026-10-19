@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Installs the Theme Report analyzer (and, outside a plugin-manager checkout, the widget).
 # With no options it uses, in order: the binary bundled in a release archive, a matching
-# local cargo build, or the matching release from GitHub, checksum-verified.
+# local cargo build, or the matching release from GitHub, verified against a source-pinned digest.
 set -euo pipefail
 root=$HOME
 binary=""
@@ -66,22 +66,33 @@ if $download; then
   command -v curl >/dev/null || { echo "Downloading the analyzer needs curl." >&2; exit 1; }
   name=theme-report-$version-linux-x86_64.tar.gz
   url=https://github.com/OldJobobo/theme-report/releases/download/v$version
+  # Trust reviewed source, never a checksum downloaded alongside a mutable asset.
+  # After publishing a new analyzer, verify its provenance and add its digest here
+  # in a separate plugin commit. Until then, that version must use --build.
+  case "$version:$arch" in
+    0.9.1:x86_64)
+      digest=68ef45e65ea03bdc15da7c723df0ecd778e6859efd6def8274a78c49c6dbd531
+      source_commit=3407b2670c63b24dafe4f215081ba14d490d6543
+      ;;
+    *) echo "No reviewed archive digest for $version on $arch. Use --build instead." >&2; exit 1;;
+  esac
   if $dry; then
-    echo "Would download $url/$name and check its checksum"
+    echo "Would download $url/$name and verify source-pinned SHA-256 $digest (source $source_commit)"
   else
     work=$(mktemp -d); cleanup+=("$work")
     echo "Downloading theme-report $version..."
-    for file in "$name" "$name.sha256"; do
-      curl -fsSL --proto '=https' --tlsv1.2 -o "$work/$file" "$url/$file" ||
-        { echo "Could not download $url/$file" >&2; echo "To build it yourself instead: bash $repo/scripts/install.sh --build" >&2; exit 1; }
-    done
-    (cd -- "$work" && sha256sum --quiet -c -- "$name.sha256") || { echo "Checksum mismatch for $name; nothing was installed." >&2; exit 1; }
+    curl -fsSL --proto '=https' --tlsv1.2 -o "$work/$name" "$url/$name" ||
+      { echo "Could not download $url/$name" >&2; echo "To build it yourself instead: bash $repo/scripts/install.sh --build" >&2; exit 1; }
+    actual=$(sha256sum -- "$work/$name"); actual=${actual%% *}
+    [[ $actual == "$digest" ]] || { echo "Source-pinned checksum mismatch for $name; nothing was installed." >&2; exit 1; }
     if command -v gh >/dev/null && gh auth status >/dev/null 2>&1; then
-      gh attestation verify "$work/$name" -R OldJobobo/theme-report >/dev/null ||
-        { echo "GitHub could not confirm $name was built by this project's release workflow; nothing was installed." >&2; exit 1; }
-      echo "Verified: checksum matches, and GitHub confirms the release workflow built it."
+      gh attestation verify "$work/$name" -R OldJobobo/theme-report \
+        --source-digest "$source_commit" --source-ref "refs/tags/v$version" \
+        --signer-workflow OldJobobo/theme-report/.github/workflows/release.yml >/dev/null ||
+        { echo "GitHub could not confirm $name was built from $source_commit by this project's release workflow; nothing was installed." >&2; exit 1; }
+      echo "Verified: source-pinned checksum and provenance for $source_commit match."
     else
-      echo "Verified: checksum matches. (With the gh CLI logged in, the installer also checks who built it.)"
+      echo "Verified: source-pinned checksum matches. (With the gh CLI logged in, the installer also verifies the exact source commit and workflow.)"
     fi
     mkdir -- "$work/x"
     tar -xzf "$work/$name" -C "$work/x"

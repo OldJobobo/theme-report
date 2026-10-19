@@ -2,6 +2,7 @@
 
 ## Unreleased
 
+- **Pin downloaded executables to reviewed source.** The installer checks the archive against a SHA-256 embedded in its version/architecture table, never a checksum downloaded from the same release. Optional GitHub attestation verification now requires the exact source commit, tag and release workflow. Unknown versions fail closed; release publishing no longer replaces existing assets. Addresses marketplace submission #12129.
 - **Two-command install.** `omarchy plugin add … --enable`, then `bash ~/.config/omarchy/plugins/oldjobobo.theme-report/scripts/install.sh`. The installer now downloads the matching release binary itself and checks its checksum, plus its GitHub attestation when `gh` is logged in. No Rust toolchain, `cd` or tarball handling needed. `--build` compiles from source instead, with build files kept in `~/.cache`.
 - The installer asks before adding the badge to your bar or restarting the shell, instead of printing commands to copy. `install.sh --help` lists the options.
 - When the analyzer is missing, the panel shows the install command instead of a path to check.
