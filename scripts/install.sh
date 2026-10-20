@@ -70,6 +70,10 @@ if $download; then
   # After publishing a new analyzer, verify its provenance and add its digest here
   # in a separate plugin commit. Until then, that version must use --build.
   case "$version:$arch" in
+    0.9.2:x86_64)
+      digest=0dcc44c05f6a3b11e36a376b9fc04b73bdc791eedb9f6d39270f59f2953fe84a
+      source_commit=95d946e53b744689298a7eb19d6e5e66fb4f3146
+      ;;
     0.9.1:x86_64)
       digest=68ef45e65ea03bdc15da7c723df0ecd778e6859efd6def8274a78c49c6dbd531
       source_commit=3407b2670c63b24dafe4f215081ba14d490d6543
