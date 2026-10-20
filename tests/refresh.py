@@ -4,11 +4,20 @@ import os
 import pathlib
 import shutil
 import subprocess
+import sys
 import tempfile
 
 ROOT = pathlib.Path(__file__).resolve().parents[1]
 WORK = ROOT / ".testbed/refresh"
 WORK.mkdir(parents=True, exist_ok=True)
+
+# Run the same behavior suite with the stable API and the newer socket registry.
+# Neither fixture supplies ShellIpc: a hard dependency must fail this regression.
+if len(sys.argv) == 1:
+    for api in ("stable", "registry"):
+        subprocess.run([sys.executable, __file__, api], check=True)
+    sys.exit(0)
+with_registry = sys.argv[1] == "registry"
 
 with tempfile.TemporaryDirectory(dir=WORK) as temp:
     base = pathlib.Path(temp)
@@ -82,8 +91,26 @@ print(json.dumps(report))
     commons.mkdir()
     plugin.mkdir()
     (ui / "qmldir").write_text("module qs.Ui\nPanel 1.0 Panel.qml\nWidgetButton 1.0 WidgetButton.qml\nKeyboardPanel 1.0 KeyboardPanel.qml\n")
-    (commons / "qmldir").write_text("module qs.Commons\nsingleton Style 1.0 Style.qml\nShellIpc 1.0 ShellIpc.qml\n")
-    (commons / "ShellIpc.qml").write_text("import Quickshell.Io\nIpcHandler { }\n")
+    (commons / "qmldir").write_text("module qs.Commons\nsingleton Style 1.0 Style.qml\n" +
+                                   ("singleton IpcRegistry 1.0 IpcRegistry.qml\n" if with_registry else ""))
+    if with_registry:
+        (commons / "IpcRegistry.qml").write_text('''pragma Singleton
+import QtQuick
+QtObject {
+    property var handlers: []
+    function register(handler) {
+        if (handlers.indexOf(handler) === -1) handlers.push(handler)
+    }
+    function unregister(handler) {
+        var index = handlers.indexOf(handler)
+        if (index !== -1) handlers.splice(index, 1)
+    }
+    function grade() {
+        var owners = handlers.filter(function(h) { return h.enabled })
+        return owners.length === 1 ? owners[0].grade() : "invalid-owners"
+    }
+}
+''')
     (commons / "Style.qml").write_text("pragma Singleton\nimport QtQuick\nQtObject { function space(n) { return n } }\n")
     (ui / "Panel.qml").write_text('''import QtQuick
 Item {
@@ -149,7 +176,10 @@ Item {
 import Quickshell
 import Quickshell.Io
 import "Plugin" as Plugin
+import "Commons" as Commons
 ShellRoot {
+    readonly property var registry: typeof Commons.IpcRegistry !== "undefined" && Commons.IpcRegistry && typeof Commons.IpcRegistry.register === "function" ? Commons.IpcRegistry : null
+    Component { id: spareFactory; Plugin.Main {} }
     Plugin.Main { id: first }
     Plugin.Main { id: second }
     property int stage: 0
@@ -157,6 +187,12 @@ ShellRoot {
     function verify(condition, message) {
         if (!condition) { console.error("FAIL:", message, first.status, first.error, second.status, second.error); Qt.quit() }
         return condition
+    }
+    Process {
+        id: ipcProbe
+        command: ["qs", "ipc", "-p", Quickshell.env("THEME_REPORT_TEST_CONFIG"), "call", "oldjobobo.theme-report", "grade"]
+        property string answer: ""
+        stdout: StdioCollector { onStreamFinished: ipcProbe.answer = text.trim() }
     }
     Process { id: mutation; command: [Quickshell.env("HOME") + "/.local/bin/theme-report", "change-inputs"] }
     // A bar listing both copies; its shell routes summon to the second (the "focused monitor").
@@ -184,6 +220,8 @@ ShellRoot {
         interval: 700; running: true; repeat: true
         onTriggered: {
             if (stage === 0) {
+                if (!verify(!!registry === (Quickshell.env("THEME_REPORT_TEST_API") === "registry"), "expected IPC API variant: " + Quickshell.env("THEME_REPORT_TEST_API") + " registry=" + registry)) return
+                if (!verify(!registry || registry.handlers.length === 2, "new shell registers both handlers")) return
                 if (!verify(!first.report && !second.report && first.status === "Not audited" && second.status === "Not audited", "no startup audits")) return
                 first.request(true); second.request(true)
                 stage++
@@ -236,11 +274,18 @@ ShellRoot {
                 var st = JSON.parse(first.statusJson())
                 if (!verify(st.grade === "A" && st.badge === "~A" && st.stale === true && st.open === false && st.checking === false && st.theme === "fixture" && st.activeTheme === "other", "status JSON")) return
                 if (!verify(first.badgeFor(first.latestReport()) === "~A", "grade answer")) return
+                if (!verify(!registry || registry.grade() === "~A", "registry routes to the elected handler")) return
+                var spare = spareFactory.createObject(null)
+                if (!verify(!registry || registry.handlers.length === 3, "dynamic handler registers")) return
+                spare.destroy()
+                ipcProbe.running = true
                 var firstCheck = first.startCheck(false), secondCheck = first.startCheck(true)
                 if (!verify(firstCheck === "started" && secondCheck === "busy", "background check and busy answer")) return
                 if (!verify(second.sharedChecking && second.checking, "every badge shows a background check")) return
                 stage++
             } else if (stage === 10) {
+                if (!verify(!registry || registry.handlers.length === 2, "destroyed handler unregisters")) return
+                if (!verify(!ipcProbe.running && ipcProbe.answer === "~A", "native IPC reaches the handler")) return
                 if (!verify(!first.checking && !second.checking && first.report !== retained && second.report === first.report && !first.opened && !second.opened, "background check updates every badge without opening")) return
                 mark.command = ["sh", "-c", "echo $1 >> $HOME/audit-count", "sh", "ipc-panel"]
                 mark.running = true
@@ -254,6 +299,7 @@ ShellRoot {
                 fakeBar.widgets = [second, first]
                 first.electAll()
                 if (!verify(second.ipcOwner && !first.ipcOwner, "ownership follows the bar's order")) return
+                if (!verify(!registry || registry.grade() === "~A", "registry follows ownership changes")) return
                 if (!verify(second.startAgent("fix", "", "window") === "stale", "agent handoff refuses a result for another theme")) return
                 if (!verify(second.startAgent("bogus", "", "window") === "unknown" && second.startAgent("fix", "", "email") === "unknown", "unknown handoff kind or mode")) return
                 if (!verify(second.agentName === "Pi", "default agent name")) return
@@ -309,9 +355,11 @@ ShellRoot {
     runtime = base / "runtime"
     runtime.mkdir(mode=0o700)
     env = dict(os.environ, HOME=str(home), XDG_CACHE_HOME=str(base / "cache"),
-               XDG_RUNTIME_DIR=str(runtime), QT_QPA_PLATFORM="offscreen")
+               # Keep AF_UNIX socket paths below Linux's 108-byte limit.
+               XDG_RUNTIME_DIR="/proc/self/cwd/runtime", QT_QPA_PLATFORM="offscreen",
+               THEME_REPORT_TEST_CONFIG=str(base), THEME_REPORT_TEST_API=sys.argv[1])
     result = subprocess.run(["quickshell", "-p", str(base)], env=env, text=True,
-                            capture_output=True, timeout=20)
+                            capture_output=True, timeout=20, cwd=base)
     output = result.stdout + result.stderr
     assert result.returncode == 0 and "PASS: startup" in output and "FAIL:" not in output, output
     counts = (home / "audit-count").read_text().splitlines()
@@ -322,7 +370,9 @@ ShellRoot {
     assert (home / "agent-log").read_text().splitlines() == ["agent fix --window --rule readability.bar", "prompt explain", "prompt fix", "agent review --window"], (home / "agent-log").read_text()
     main = (ROOT / "Main.qml").read_text()
     assert not any(token in main for token in
-                   ["Component.onCompleted", "Timer", "queued", "freshnessExpiry"]), "Automatic audits must remain absent"
+                   ["Timer", "queued", "freshnessExpiry"]), "Automatic audits must remain absent"
+    assert main.count("Component.onCompleted:") == 1
+    assert "Component.onCompleted: { if (root.ipcRegistry) root.ipcRegistry.register(ipcHandler) }" in main, "Startup hook only registers IPC"
     # File views only watch: they never read a file themselves and never audit. Every
     # read goes through the analyzer's read-only `state` command.
     for block in main.split("FileView {")[1:]:
@@ -332,4 +382,4 @@ ShellRoot {
     assert "text()" not in main and ".reload()" not in main, "The panel must not read files directly"
     states = (home / "state-log").read_text().splitlines()
     assert states and all(line.split()[0] == "state" for line in states), states
-    print("PASS: open-only audit regression and IPC (real Process, two widgets, exact invocation counts, cancellation, single IPC owner, focused routing, agent handoffs)")
+    print(f"PASS: {sys.argv[1]} IPC API: open-only audits, native IPC, optional registry lifecycle/routing, cancellation, single owner, focused routing, agent handoffs")

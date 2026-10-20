@@ -4,6 +4,7 @@ import Quickshell
 import Quickshell.Io
 import qs.Ui
 import qs.Commons
+import qs.Commons as Commons
 
 Panel {
     id: root
@@ -21,6 +22,7 @@ Panel {
     property string diagnostic: ""
     property string currentTheme: ""
     property bool ipcOwner: false
+    readonly property var ipcRegistry: typeof Commons.IpcRegistry !== "undefined" && Commons.IpcRegistry && typeof Commons.IpcRegistry.register === "function" && typeof Commons.IpcRegistry.unregister === "function" ? Commons.IpcRegistry : null
     // A check started over IPC by another copy; shown on every badge.
     property bool sharedChecking: false
     property string headlessOutput: ""
@@ -230,7 +232,12 @@ Panel {
             }
         }
     }
-    ShellIpc {
+    IpcHandler {
+        id: ipcHandler
+        // Stable Omarchy uses Quickshell IPC directly. Newer shells also route
+        // calls through IpcRegistry; do not require their ShellIpc QML type.
+        Component.onCompleted: { if (root.ipcRegistry) root.ipcRegistry.register(ipcHandler) }
+        Component.onDestruction: { if (root.ipcRegistry) root.ipcRegistry.unregister(ipcHandler) }
         enabled: root.ipcOwner
         target: root.ipcTarget
 

@@ -33,6 +33,7 @@ with tempfile.TemporaryDirectory(dir=WORK) as temp:
                             capture_output=True, timeout=15)
     output = result.stdout + result.stderr
     assert result.returncode == 0 and "PASS: live theme" in output and "UI assertion failed" not in output, output
+    assert "TypeError:" not in output and "ReferenceError:" not in output, output
     lint = subprocess.run(["qmllint", "-I", str(base), str(base / "plugin/Main.qml"),
                            str(base / "plugin/ReportPanel.qml")], text=True, capture_output=True)
     assert lint.returncode == 0, lint.stdout + lint.stderr

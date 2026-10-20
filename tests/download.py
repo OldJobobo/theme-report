@@ -13,6 +13,7 @@ import tempfile
 ROOT = pathlib.Path(__file__).resolve().parents[1]
 WORK = ROOT / ".testbed/download"
 WORK.mkdir(parents=True, exist_ok=True)
+PINNED_VERSION = "0.9.1"
 PIN = "68ef45e65ea03bdc15da7c723df0ecd778e6859efd6def8274a78c49c6dbd531"
 SOURCE = "3407b2670c63b24dafe4f215081ba14d490d6543"
 
@@ -22,7 +23,10 @@ with tempfile.TemporaryDirectory(dir=WORK) as tmp:
     (repo / "scripts").mkdir(parents=True)
     for rel in ("scripts/install.sh", "manifest.json", "Main.qml", "ReportPanel.qml"):
         shutil.copy2(ROOT / rel, repo / rel)
-    version = json.loads((repo / "manifest.json").read_text())["version"]
+    # Exercise a reviewed release even while preparing the next unpinned tag.
+    manifest = json.loads((repo / "manifest.json").read_text())
+    manifest["version"] = version = PINNED_VERSION
+    (repo / "manifest.json").write_text(json.dumps(manifest, indent=2))
     tools = base / "tools"
     tools.mkdir()
     calls = base / "calls"

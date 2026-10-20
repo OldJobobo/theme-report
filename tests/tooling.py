@@ -114,7 +114,11 @@ with tempfile.TemporaryDirectory(dir=WORK) as temp:
     plan = subprocess.run(["bash", str(checkout / "scripts/install.sh"), "--root", str(home), "--dry-run"],
                           cwd=ROOT, env=env, text=True, capture_output=True)
     version = json.loads((ROOT / "manifest.json").read_text())["version"]
-    assert plan.returncode == 0 and f"/v{version}/theme-report-{version}-linux-x86_64.tar.gz" in plan.stdout, plan
+    if f"{version}:x86_64)" in (checkout / "scripts/install.sh").read_text():
+        assert plan.returncode == 0 and f"/v{version}/theme-report-{version}-linux-x86_64.tar.gz" in plan.stdout, plan
+    else:
+        # A release tag is built before its verified digest is pinned in source.
+        assert plan.returncode != 0 and "No reviewed archive digest" in plan.stderr, plan
     assert not (home / ".local").exists(), "A dry run downloads and installs nothing"
     command(*install)
     command(*install)
